@@ -1,0 +1,20 @@
+# Live reload for the Go server: `air` (install: go install github.com/air-verse/air@latest)
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/router-go ./cmd/router-go"
+  entrypoint = ["./tmp/router-go"]
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "web", "docs", "node_modules"]  # the frontend reloads through Vite (cd web && bun run dev)
+  exclude_regex = ["_test\\.go$"]
+  delay = 300            # ms: batch rapid saves
+  stop_on_error = true   # keep the last good binary running while the build is broken
+  send_interrupt = true  # SIGINT first, so the server shuts down gracefully
+  kill_delay = "2s"
+
+[log]
+  time = false
+
+[misc]
+  clean_on_exit = true

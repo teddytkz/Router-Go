@@ -1,0 +1,95 @@
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens: one neutral ramp + a single violet accent. Light is the default, .dark overrides. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f0f2f5;
+  --border: #e3e6eb;
+  --text: #14171f;
+  --muted: #667085;
+  --accent: #6d4aff;
+  --accent-soft: #efeaff;
+  --accent-fg: #ffffff;
+  --ok: #12a566;
+  --ok-soft: #e3f6ec;
+  --warn: #c77a05;
+  --warn-soft: #fdf1dc;
+  --err: #d92d3f;
+  --err-soft: #fde8ea;
+  /* console log pane: always a dark terminal, in both themes */
+  --term-bg: #0b0d12;
+  --term-text: #d7dbe5;
+  --term-muted: #6b7385;
+  --term-info: #5fd6a0;
+  --term-warn: #f2b84b;
+  --term-error: #ff6b7a;
+  --term-tag: #9d86ff;
+  --shadow: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
+}
+.dark {
+  --bg: #0b0d12;
+  --surface: #12151c;
+  --surface-2: #181c25;
+  --border: #242936;
+  --text: #e8eaf0;
+  --muted: #8a93a6;
+  --accent: #8b6dff;
+  --accent-soft: #211a45;
+  --accent-fg: #0b0d12;
+  --ok: #3ddc97;
+  --ok-soft: #0f2a1f;
+  --warn: #f2b84b;
+  --warn-soft: #2e2410;
+  --err: #ff6b7a;
+  --err-soft: #331519;
+  --shadow: 0 0 0 1px rgb(255 255 255 / 0.02);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-err: var(--err);
+  --color-err-soft: var(--err-soft);
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+* { border-color: var(--border); }
+::selection { background: var(--accent-soft); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+/* reduced motion drops decoration, but a spinner is the only sign that a request is running, so it keeps turning */
+@media (prefers-reduced-motion: reduce) { *:not(.animate-spin) { animation: none !important; transition: none !important; } }
+
+@keyframes shimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 37%, var(--surface-2) 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: 8px;
+}
+@keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98) } to { opacity: 1; transform: none } }
+.pop { animation: pop .16s ease-out; }
