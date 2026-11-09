@@ -260,7 +260,11 @@ func (g *Gateway) attempt(w http.ResponseWriter, r *http.Request, t target, cf s
 		return outcome{res: failed, f: &failure{status: 429, retry: soonest, msg: msg}}
 	}
 
-	forceStream := g.forceStream(node) && uf == "chat" && !isPass(cf)
+	anthropic := node.Type == db.NodeTypeAnthropic
+	np, native := nativeOf(node)
+	respFmt := g.respFormat(node, uf)
+	// a Native provider's Response always speaks chat, so its lanes stream too and are assembled below
+	forceStream := g.forceStream(node) && (uf == "chat" || native) && !isPass(cf)
 	var payload []byte
 	path, ctype := passthrough[cf], ""
 	if isPass(cf) {
@@ -272,9 +276,6 @@ func (g *Gateway) attempt(w http.ResponseWriter, r *http.Request, t target, cf s
 	if err != nil {
 		return outcome{res: failed, f: &failure{status: 400, msg: "cannot convert request: " + err.Error(), scoped: true}}
 	}
-	anthropic := node.Type == db.NodeTypeAnthropic
-	np, native := nativeOf(node)
-
 	br := g.breakerFor(node.ID)
 	if pipe.breaker {
 		if ok, wait := br.allow(); !ok {
@@ -339,7 +340,7 @@ func (g *Gateway) attempt(w http.ResponseWriter, r *http.Request, t target, cf s
 				hreq.Header.Set("Content-Type", ctype)
 			}
 			g.nodeHeaders(hreq, node)
-			resp, err = g.Client.Do(hreq)
+			resp, err = g.clientFor(node).Do(hreq)
 		}
 		if err != nil {
 			if r.Context().Err() != nil {
@@ -385,10 +386,10 @@ func (g *Gateway) attempt(w http.ResponseWriter, r *http.Request, t target, cf s
 		switch {
 		case forceStream && !stream: // the upstream was asked to stream; assemble a normal response for this client
 			u, converted, relayErr = relayAggregated(w, resp, cf, t.model)
-		case cf == uf || isPass(cf):
+		case cf == respFmt || isPass(cf):
 			u, relayErr = relay(w, resp, g.envelope(node))
 		default:
-			u, converted, relayErr = relayConverted(w, resp, uf, cf, t.model, g.envelope(node))
+			u, converted, relayErr = relayConverted(w, resp, respFmt, cf, t.model, g.envelope(node))
 		}
 		resp.Body.Close()
 		if !converted && relayErr == nil { // unreadable body, nothing was written: next key
@@ -563,6 +564,15 @@ func (g *Gateway) formatFor(node *db.Node, model string) string {
 func (g *Gateway) forceStream(node *db.Node) bool {
 	p, ok := node.Builtin()
 	return ok && p.ForceStream
+}
+
+// respFormat is the format the upstream answer comes back in: a Native provider converts its own lanes to chat, so the
+// relay never needs to know them.
+func (g *Gateway) respFormat(node *db.Node, uf string) string {
+	if _, native := nativeOf(node); native {
+		return "chat"
+	}
+	return uf
 }
 
 func (g *Gateway) envelope(node *db.Node) bool {

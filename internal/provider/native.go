@@ -26,4 +26,12 @@ type NativeCall struct {
 	Model  string         // upstream model id
 	Body   map[string]any // chat-format body: a private copy
 	Stream bool
+	// Do sends a side request (session claim, run registration, token exchange) through the gateway's client, so
+	// proxy pools and its transport apply as they do to the chat call itself.
+	Do func(*http.Request) (*http.Response, error)
 }
+
+// DoerFunc adapts a bare Do to Doer, for side calls that go through DoJSON or a provider's own request code.
+type DoerFunc func(*http.Request) (*http.Response, error)
+
+func (f DoerFunc) Do(r *http.Request) (*http.Response, error) { return f(r) }

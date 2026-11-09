@@ -10,13 +10,14 @@ import (
 )
 
 // usage ports XRouter-Next's getFreebuffUsage. The daily session quota lives on the session endpoint itself and is read
-// with GET only: a POST would claim a session and burn a unit of the quota. The CLI identity headers XRouter adds
-// (client version, CLI user agent) are not sent.
+// with GET only: a POST would claim a session and burn a unit of the quota.
 func usage(ctx context.Context, d provider.Doer, c provider.UsageCall) (provider.Usage, error) {
 	if c.Token == "" {
 		return provider.Usage{Message: "Freebuff credential not available — connect a Freebuff login first."}, nil
 	}
-	raw, status, err := provider.DoJSON(ctx, d, http.MethodGet, c.BaseURL+"/freebuff/session", map[string]string{"Authorization": "Bearer " + c.Token}, nil)
+	raw, status, err := provider.DoJSON(ctx, d, http.MethodGet, c.BaseURL+sessionHr, map[string]string{
+		"Authorization": "Bearer " + c.Token, "User-Agent": cliUA, "x-freebuff-client-version": cliVer,
+	}, nil)
 	if err != nil {
 		return provider.Usage{Message: "Freebuff usage error: " + err.Error()}, nil
 	}

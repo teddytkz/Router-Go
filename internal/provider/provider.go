@@ -6,6 +6,7 @@ package provider
 
 import (
 	"context"
+	"net/http"
 	"slices"
 	"strings"
 	"sync"
@@ -64,6 +65,10 @@ type Provider struct {
 	Prepare func(body map[string]any) `json:"-"`
 	// Native replaces the OpenAI-style call entirely (see native.go); BaseURL then only names the default endpoint.
 	Native *Native `json:"-"`
+	// Transport builds the transport for this provider's upstream calls, for an upstream that only accepts its own
+	// client's TLS fingerprint. nil = the shared client (proxy pools included); a returned transport still goes
+	// through the pools.
+	Transport func() *http.Transport `json:"-"`
 
 	// Usage reads the connection's live quota from the provider's own usage API (see usage.go); nil = not supported.
 	Usage func(ctx context.Context, d Doer, c UsageCall) (Usage, error) `json:"-"`

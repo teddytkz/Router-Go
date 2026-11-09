@@ -78,7 +78,7 @@ func (g *Gateway) Validate(ctx context.Context, nodeType, baseURL, apiType, key,
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	models, status, err := g.listModels(ctx, base, key, anthropic)
+	models, status, err := g.listModels(ctx, g.Client, base, key, anthropic)
 	switch {
 	case err == nil:
 		return ValidateResult{Valid: true, Method: "models", Models: models}
@@ -125,9 +125,9 @@ func networkMessage(err error) string {
 }
 
 // listModels does GET {base}/models. status==0 means a transport error.
-func (g *Gateway) listModels(ctx context.Context, base, key string, anthropic bool) ([]string, int, error) {
+func (g *Gateway) listModels(ctx context.Context, c *http.Client, base, key string, anthropic bool) ([]string, int, error) {
 	req, _ := g.newReq(ctx, "GET", base+"/models", key, nil, false, anthropic)
-	resp, err := g.Client.Do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -201,7 +201,7 @@ func (g *Gateway) NodeModels(ctx context.Context, node *db.Node, force bool) ([]
 	defer cancel()
 	var lastErr error
 	for _, c := range conns {
-		models, _, err := g.listModels(ctx, node.BaseURL(), c.APIKey(), node.Type == db.NodeTypeAnthropic)
+		models, _, err := g.listModels(ctx, g.clientFor(node), node.BaseURL(), c.APIKey(), node.Type == db.NodeTypeAnthropic)
 		if err == nil {
 			g.cache.mu.Lock()
 			g.cache.m[node.ID] = cacheEntry{models, time.Now()}
@@ -250,7 +250,7 @@ func (g *Gateway) ProbeModel(ctx context.Context, node *db.Node, key, model stri
 	req, _ := g.newReq(ctx, "POST", node.BaseURL()+path, key, b, true, anthropic)
 	g.nodeHeaders(req, node)
 	start := time.Now()
-	resp, err := g.Client.Do(req)
+	resp, err := g.clientFor(node).Do(req)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			return 0, fmt.Errorf("no answer within %ds — the provider is not responding to chat requests", int(probeTimeout.Seconds()))

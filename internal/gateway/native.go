@@ -29,13 +29,14 @@ func (g *Gateway) nativeDo(ctx context.Context, node *db.Node, p provider.Provid
 		return nil, err
 	}
 	urls := p.Native.Endpoints(node.BaseURL(), psd)
+	client := g.clientFor(node)
 	for i, u := range urls {
-		req, err := p.Native.Request(ctx, provider.NativeCall{URL: u, Token: key, Data: psd, Model: model, Body: body, Stream: stream})
+		req, err := p.Native.Request(ctx, provider.NativeCall{URL: u, Token: key, Data: psd, Model: model, Body: body, Stream: stream, Do: client.Do})
 		if err != nil {
 			return nil, err
 		}
 		g.nodeHeaders(req, node)
-		resp, err := g.Client.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			return nil, err
 		}

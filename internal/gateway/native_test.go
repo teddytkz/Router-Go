@@ -13,6 +13,27 @@ import (
 	"router-go/internal/provider"
 )
 
+// A Native provider converts its own lanes to chat, so the relay must not treat a responses-lane answer as "responses".
+func TestRespFormatForNative(t *testing.T) {
+	provider.Register(provider.Provider{ID: "fmtfake", Alias: "ff", Name: "FmtFake", Category: provider.CategoryFree, Status: provider.StatusExperimental,
+		Native: &provider.Native{Endpoints: func(string, map[string]any) []string { return nil }},
+	})
+	store, err := db.Open(filepath.Join(t.TempDir(), "data.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	g := New(store)
+	node, _ := store.Node("fmtfake")
+	if got := g.respFormat(node, "responses"); got != "chat" {
+		t.Errorf("native responses lane reported as %q, want chat", got)
+	}
+	custom := &db.Node{ID: "custom", Type: db.NodeTypeOpenAI, Data: map[string]any{"apiType": "responses"}}
+	if got := g.respFormat(custom, "responses"); got != "responses" {
+		t.Errorf("custom node reported as %q", got)
+	}
+}
+
 // nativeDo walks a Native provider's endpoints on 401/403/404 only, converts a 2xx and returns other errors untouched.
 func TestNativeDoEndpointFallback(t *testing.T) {
 	var hits []string

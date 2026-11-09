@@ -85,6 +85,11 @@ func (t *poolTransport) proxyTransport(raw string) (*http.Transport, error) {
 	}
 	tr := t.base.Clone()
 	tr.Proxy = http.ProxyURL(u)
+	// Through a proxy the custom dialer is handed the proxy address, not the target, so a provider that fingerprints
+	// its TLS (opencode) would handshake to the proxy instead of tunnelling; the pool keeps the plain TLS path.
+	if tr.DialTLSContext != nil {
+		tr.DialTLSContext = nil
+	}
 	t.via[raw] = tr
 	return tr, nil
 }

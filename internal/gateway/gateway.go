@@ -25,6 +25,7 @@ type Gateway struct {
 	limiter  limiter
 	active   map[uint64]ActiveRequest
 	nextID   uint64
+	clients  map[string]*http.Client // per-provider clients, for providers with their own Transport
 }
 
 // ActiveRequest is a request currently being served by an upstream (including while its response streams).
@@ -66,6 +67,26 @@ func (g *Gateway) Active() []ActiveRequest {
 func New(store *db.Store) *Gateway {
 	return &Gateway{Store: store, Client: newClient(store), cache: modelCache{m: map[string]cacheEntry{}},
 		breakers: map[string]*breaker{}, active: map[uint64]ActiveRequest{}, limiter: limiter{gates: map[string]*gate{}}}
+}
+
+// clientFor is the HTTP client for node: providers that need their own client's TLS fingerprint bring a transport,
+// and it still goes through proxy pools like the shared one.
+func (g *Gateway) clientFor(node *db.Node) *http.Client {
+	p, ok := node.Builtin()
+	if !ok || p.Transport == nil {
+		return g.Client
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if c := g.clients[node.ID]; c != nil {
+		return c
+	}
+	if g.clients == nil {
+		g.clients = map[string]*http.Client{}
+	}
+	c := &http.Client{Transport: newPoolTransport(g.Store, p.Transport())}
+	g.clients[node.ID] = c
+	return c
 }
 
 func (g *Gateway) Mount(r chi.Router) {

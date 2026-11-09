@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	"router-go/internal/provider"
 )
 
@@ -114,12 +112,6 @@ func tokens(access, refresh string, expiresIn int64) provider.Tokens {
 		expiresIn = 86400
 	}
 	return provider.Tokens{AccessToken: access, RefreshToken: refresh, ExpiresAt: time.Now().Add(time.Duration(expiresIn) * time.Second)}
-}
-
-// requestHeaders are the per-request ids the CodeBuddy gateway expects with every chat call.
-func requestHeaders() map[string]string {
-	id := uuid.NewString()
-	return map[string]string{"X-Request-ID": id, "X-Conversation-ID": uuid.NewString(), "X-Conversation-Request-ID": id, "X-Conversation-Message-ID": id}
 }
 
 func firstNonEmpty(a, b string) string {

@@ -499,7 +499,7 @@ func TestNoAuthProviderNeedsNoKey(t *testing.T) {
 	if conns, _ := e.store.Connections(node.ID, false); len(conns) != 0 {
 		t.Fatalf("fresh install has connections: %d", len(conns))
 	}
-	resp := e.chat(`{"model":"oc/union-alpha","messages":[{"role":"user","content":"x"}]}`, e.apiKey)
+	resp := e.chat(`{"model":"oc/big-pickle","messages":[{"role":"user","content":"x"}]}`, e.apiKey)
 	b, _ := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if strings.Contains(string(b), "Add an API key") || strings.Contains(string(b), "No active connection") {
@@ -510,7 +510,7 @@ func TestNoAuthProviderNeedsNoKey(t *testing.T) {
 		t.Fatalf("connections = %+v", conns)
 	}
 	e.store.PatchConnection(conns[0].ID, map[string]any{"isActive": false}, nil)
-	e.chat(`{"model":"oc/union-alpha","messages":[{"role":"user","content":"x"}]}`, e.apiKey).Body.Close()
+	e.chat(`{"model":"oc/big-pickle","messages":[{"role":"user","content":"x"}]}`, e.apiKey).Body.Close()
 	if all, _ := e.store.Connections(node.ID, false); len(all) != 1 {
 		t.Errorf("a disabled connection was recreated: %d", len(all))
 	}

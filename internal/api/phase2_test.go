@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1192,16 +1193,16 @@ func TestBuiltinProviders(t *testing.T) {
 		pm := p.(map[string]any)
 		status[pm["id"].(string)] = pm["status"].(string)
 	}
-	if len(status) != 6 || status["kiro"] != "experimental" || status["cline"] != "ready" || status["qoder"] != "unsupported" || status["opencode"] != "experimental" {
+	if len(status) != 6 || status["kiro"] != "experimental" || status["cline"] != "ready" || status["qoder"] != "experimental" || status["opencode"] != "experimental" {
 		t.Fatalf("registry = %v", status)
 	}
 	// a custom node cannot take a reserved alias
 	if st, _ := call("POST", "/api/provider-nodes", `{"name":"x","prefix":"cl","apiType":"chat","baseUrl":"http://x"}`); st != 409 {
 		t.Errorf("custom node with a built-in alias: %d", st)
 	}
-	// unsupported providers cannot get keys, and a key is required where none is free
-	if st, _ := call("POST", "/api/providers", `{"provider":"qoder","name":"k","apiKey":"pt-1"}`); st != 400 {
-		t.Errorf("qoder key: %d", st)
+	// a key is required where none is free
+	if st, _ := call("POST", "/api/providers", `{"provider":"qoder","name":"k","apiKey":""}`); st != 400 {
+		t.Errorf("qoder without a key: %d", st)
 	}
 	if st, _ := call("POST", "/api/providers", `{"provider":"cline","name":"k","apiKey":""}`); st != 400 {
 		t.Errorf("cline without a key: %d", st)
@@ -1263,7 +1264,7 @@ func TestBuiltinProviders(t *testing.T) {
 	if _, r := call("POST", "/api/providers/"+id+"/test", ""); r["valid"] != true {
 		t.Errorf("test connection: %v", r)
 	}
-	// unsupported providers are refused at request time with a clear message
+	// a provider with no connection is refused at request time with a clear message
 	if st, out := call("POST", "/v1/chat/completions", `{"model":"qd/auto","messages":[]}`); st != 400 && st != 401 {
 		t.Errorf("qoder request: %d %v", st, out)
 	}
@@ -1692,30 +1693,14 @@ func TestOAuthFlowsPerProvider(t *testing.T) {
 		t.Errorf("exchange on a poll provider: %d", st)
 	}
 
-	// ---- Freebuff: the install's fingerprint goes to the login endpoint; 401 means "not yet" ----
-	st, start = call("POST", "/api/oauth/freebuff/start", `{}`)
-	if st != 200 || start["kind"] != "poll" || !strings.Contains(start["authUrl"].(string), "auth_code=abc") {
-		t.Fatalf("freebuff start: %d %v", st, start)
+	// ---- Freebuff: the port is fail-closed (the live backend refuses third-party clients and bills strikes), so
+	// every entry point refuses before any upstream call ----
+	for _, route := range []string{"/api/oauth/freebuff/start", "/api/oauth/freebuff/poll", "/api/oauth/freebuff/exchange"} {
+		if st, body := call("POST", route, `{}`); st != 400 || !strings.Contains(fmt.Sprint(body["error"]), "cannot be used yet") {
+			t.Errorf("%s on the unsupported provider: %d %v", route, st, body)
+		}
 	}
-	mu.Lock()
-	fp := freebuffFP
-	mu.Unlock()
-	if len(fp) != 32 {
-		t.Errorf("fingerprint = %q", fp)
-	}
-	state, _ := json.Marshal(start["state"])
-	if _, p := call("POST", "/api/oauth/freebuff/poll", `{"state":`+string(state)+`}`); p["status"] != "pending" {
-		t.Fatalf("freebuff first poll: %v", p)
-	}
-	if st, p := call("POST", "/api/oauth/freebuff/poll", `{"state":`+string(state)+`}`); st != 200 || p["status"] != "ok" || p["connection"].(map[string]any)["name"] != "me@fb.test" {
-		t.Fatalf("freebuff second poll: %d %v", st, p)
-	}
-	// the fingerprint is stable across sign-ins
-	call("POST", "/api/oauth/freebuff/start", `{}`)
-	mu.Lock()
-	again := freebuffFP
-	mu.Unlock()
-	if again != fp {
-		t.Errorf("fingerprint changed: %s vs %s", fp, again)
+	if st, body := call("POST", "/api/providers", `{"provider":"freebuff","apiKey":"fb-token"}`); st != 400 || !strings.Contains(fmt.Sprint(body["error"]), "cannot be used yet") {
+		t.Errorf("adding a freebuff key: %d %v", st, body)
 	}
 }

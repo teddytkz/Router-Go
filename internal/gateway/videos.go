@@ -56,7 +56,7 @@ func (g *Gateway) videoStatus(sub string) http.HandlerFunc {
 			}
 			req, _ := g.newReq(ConnCtx(r.Context(), c), "GET", target, secret, nil, false, false)
 			g.nodeHeaders(req, node)
-			resp, err := g.Client.Do(req)
+			resp, err := g.clientFor(node).Do(req)
 			if err != nil {
 				consolelog.Logf("WARN", "UPSTREAM", "%s/%s video poll unreachable: %s", node.Name, c.Name, networkMessage(err))
 				continue

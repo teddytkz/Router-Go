@@ -358,29 +358,38 @@ func TestFreeTiers(t *testing.T) {
 	e.store.UpdateSettings(map[string]any{"requireLogin": false})
 	_, out := e.json("GET", "/api/free-tiers", "")
 	rows, _ := out["tiers"].([]any)
-	fb, _ := provider.ByID("freebuff")
 	kiro, _ := provider.ByID("kiro")
 	oc, _ := provider.ByID("opencode")
-	if want := 3 + len(fb.Models) + len(kiro.Models) + len(oc.Models); len(rows) != want {
+	// freebuff's free tier exists upstream but the port is unsupported, so it is not offered
+	if want := 2 + len(kiro.Models) + len(oc.Models); len(rows) != want {
 		t.Fatalf("%d rows, want %d", len(rows), want)
 	}
 	row := func(i int) map[string]any { return rows[i].(map[string]any) }
 	// daily first: the provider row carries the cadence, then its models; unknown cadences come last, by provider name
-	if r := row(0); r["providerId"] != "freebuff" || r["providerAlias"] != "fb" || r["providerName"] != "Freebuff" || r["freeRefresh"] != "daily" || r["modelId"] != nil || r["modelName"] != nil {
+	if r := row(0); r["providerId"] != "opencode" || r["freeRefresh"] != "daily" || r["modelId"] != nil || r["modelName"] != nil {
 		t.Errorf("first row = %v", r)
 	}
-	if r := row(1); r["providerId"] != "freebuff" || r["freeRefresh"] != "daily" || r["modelId"] == nil || r["modelName"] == nil {
+	if r := row(1); r["providerId"] != "opencode" || r["freeRefresh"] != "daily" || r["modelId"] == nil || r["modelName"] == nil {
 		t.Errorf("second row = %v", r)
 	}
-	last := len(fb.Models) + 1
-	if r := row(last); r["providerId"] != "kiro" || r["freeRefresh"] != nil || r["modelId"] != nil {
-		t.Errorf("row %d = %v", last, r)
+	// an unknown cadence sorts after every known one; the provider row comes before its models
+	found := false
+	for i := range rows {
+		if r := row(i); r["providerId"] == "kiro" && r["modelId"] == nil {
+			found = true
+			if r["freeRefresh"] != nil || r["modelName"] != nil {
+				t.Errorf("kiro provider row = %v", r)
+			}
+		}
+	}
+	if !found {
+		t.Error("no kiro provider row")
 	}
 	seen := map[any]bool{}
 	for i := range rows {
 		seen[row(i)["providerId"]] = true
 	}
-	if len(seen) != 3 || !seen["opencode"] { // paid providers (cline, codebuddy-intl, search) are no free tiers
+	if len(seen) != 2 || !seen["opencode"] { // paid providers (cline, codebuddy-intl, search) and the unsupported freebuff are no free tiers
 		t.Errorf("providers = %v", seen)
 	}
 }

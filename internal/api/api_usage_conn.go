@@ -94,6 +94,9 @@ type freeTier struct {
 func (a *API) freeTiers(w http.ResponseWriter, _ *http.Request) {
 	rows := []freeTier{}
 	for _, p := range provider.All() {
+		if !p.Routable() { // an unsupported provider has a free tier upstream but this port cannot serve it
+			continue
+		}
 		if p.Category != provider.CategoryFree && p.FreeRefresh == "" {
 			continue
 		}
