@@ -155,14 +155,10 @@ func agentID(model string) string {
 }
 
 var agents = map[string]string{
-	"z-ai/glm-5.3-flash":              "base3-free-glm-5-3-flash",
 	"deepseek/deepseek-v4-flash":      "base3-free-deepseek-flash",
-	"openai/gpt-5.6-luna":             "base3-free-luna",
 	"mimo/mimo-v2.5":                  "base3-free-mimo",
 	"upstage/solar-pro4":              "base3-free-solar-pro4",
 	"meta/muse-spark-1.3-contributor": "base3-free-muse-spark-1-3",
-	"meta/muse-spark-1.2-contributor": "base3-free-muse-spark",
-	"anthropic/claude-fable-5":        "base3-free-fable",
 }
 
 // ---- session ----

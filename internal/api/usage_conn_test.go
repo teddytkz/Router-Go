@@ -191,7 +191,7 @@ func TestKiroUsageRefreshesExpiredToken(t *testing.T) {
 
 func TestFreebuffUsageIsReadOnlyAndRoutedThroughThePool(t *testing.T) {
 	session := `{"status":"none","accessTier":"limited","rateLimitsByModel":{
-	 "z-ai/glm-5.3-flash":{"limit":10,"recentCount":1.3,"resetAt":"2030-01-02T00:00:00Z","period":"pacific_day"},
+	 "deepseek/deepseek-v4-flash":{"limit":10,"recentCount":1.3,"resetAt":"2030-01-02T00:00:00Z","period":"pacific_day"},
 	 "unknown/model":{"limit":5,"recentCount":0,"resetAt":null}}}`
 	var method, auth string
 	e, hits := usageEnv(t, "freebuff", "/api/v1", func(w http.ResponseWriter, r *http.Request) {
@@ -207,8 +207,8 @@ func TestFreebuffUsageIsReadOnlyAndRoutedThroughThePool(t *testing.T) {
 	if method != "GET" || auth != "Bearer fb-token" || out["plan"] != "Freebuff (Limited)" {
 		t.Fatalf("method %s auth %q out %v", method, auth, out)
 	}
-	q := quota(t, out, "z-ai/glm-5.3-flash")
-	if q["used"] != 1.3 || q["total"] != 10.0 || q["resetAt"] != "2030-01-02T00:00:00.000Z" || q["recurring"] != true || q["displayName"] != "GLM 5.3 Flash" {
+	q := quota(t, out, "deepseek/deepseek-v4-flash")
+	if q["used"] != 1.3 || q["total"] != 10.0 || q["resetAt"] != "2030-01-02T00:00:00.000Z" || q["recurring"] != true || q["displayName"] != "DeepSeek V4 Flash" {
 		t.Errorf("quota = %v", q)
 	}
 	if u := quota(t, out, "unknown/model"); u["resetAt"] != nil || u["displayName"] != nil {

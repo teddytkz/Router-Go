@@ -14,9 +14,8 @@ import (
 
 func TestAgentID(t *testing.T) {
 	cases := map[string]string{
-		"z-ai/glm-5.3-flash":              "base3-free-glm-5-3-flash",
-		"meta/muse-spark-1.2-contributor": "base3-free-muse-spark",
-		"anthropic/claude-fable-5":        "base3-free-fable",
+		"upstage/solar-pro4":              "base3-free-solar-pro4",
+		"meta/muse-spark-1.3-contributor": "base3-free-muse-spark-1-3",
 		"something/new":                   "base2-free",
 		"":                                "base2-free",
 	}
@@ -186,7 +185,7 @@ func TestRequestSessionGates(t *testing.T) {
 		resetSessions(t)
 		f := &fakeDo{session: map[string]any{"status": status}}
 		f.status = 200
-		_, err := request(context.Background(), call(t, f, "tok", "z-ai/glm-5.3-flash"))
+		_, err := request(context.Background(), call(t, f, "tok", "upstage/solar-pro4"))
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%s: err = %v", status, err)
 		}
@@ -198,7 +197,7 @@ func TestRequestSessionGates(t *testing.T) {
 
 	// status "none" is a refusal too
 	f := &fakeDo{session: map[string]any{"status": "none"}}
-	if _, err := request(context.Background(), call(t, f, "tok", "z-ai/glm-5.3-flash")); err == nil {
+	if _, err := request(context.Background(), call(t, f, "tok", "upstage/solar-pro4")); err == nil {
 		t.Error("status none accepted")
 	}
 }

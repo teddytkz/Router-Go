@@ -12,9 +12,8 @@ func init() {
 		BaseURL: "https://www.codebuff.com/api/v1", OAuthBase: "https://freebuff.com", OAuth: oauth,
 		ForceStream: true, Prepare: prepare, Native: native,
 		Models: []provider.Model{
-			{ID: "z-ai/glm-5.3-flash", Name: "GLM 5.3 Flash"}, {ID: "deepseek/deepseek-v4-flash", Name: "DeepSeek V4 Flash"}, {ID: "openai/gpt-5.6-luna", Name: "GPT-5.6 Luna"},
-			{ID: "mimo/mimo-v2.5", Name: "MiMo 2.5"}, {ID: "upstage/solar-pro4", Name: "Solar Pro 4"}, {ID: "meta/muse-spark-1.3-contributor", Name: "Muse Spark 1.3"},
-			{ID: "meta/muse-spark-1.2-contributor", Name: "Muse Spark 1.2"}, {ID: "anthropic/claude-fable-5", Name: "Claude Fable 5"},
+			{ID: "deepseek/deepseek-v4-flash", Name: "DeepSeek V4 Flash"}, {ID: "mimo/mimo-v2.5", Name: "MiMo 2.5"}, {ID: "upstage/solar-pro4", Name: "Solar Pro 4"},
+			{ID: "meta/muse-spark-1.3-contributor", Name: "Muse Spark 1.3"},
 		},
 	})
 }
