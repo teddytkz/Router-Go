@@ -30,7 +30,8 @@ export default function App() {
         <Route path="providers" element={<Providers />} />
         <Route path="providers/:id" element={<ProviderDetail />} />
         <Route path="combos" element={<Combos />} />
-        <Route path="models" element={<Models />} />
+        <Route path="model-masking" element={<Models />} />
+        <Route path="models" element={<Navigate to="/dashboard/model-masking" replace />} />
         <Route path="token-saver" element={<TokenSaver />} />
         <Route path="api-keys" element={<ApiKeys />} />
         <Route path="console-log" element={<ConsoleLog />} />

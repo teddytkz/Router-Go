@@ -2,22 +2,22 @@ import { Boxes, Pencil, Plus, Tag, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import { Badge, Button, Card, ConfirmModal, EmptyState, errText, Field, Input, Modal, PageHeader, Select, Skeleton, useToast } from "../components/ui";
 import type { CustomModel } from "../lib/api";
-import { useAddCustomModel, useAliases, useAllModels, useCustomModels, useDeleteAlias, useDeleteCustomModel, useNodes, useAllNodes, useSetAlias } from "../lib/hooks";
+import { useAddCustomModel, useAliases, useAllModels, useCombos, useCustomModels, useDeleteAlias, useDeleteCustomModel, useNodes, useAllNodes, useSetAlias } from "../lib/hooks";
 
 const th = "text-left text-xs font-medium text-muted px-4 py-2";
 
-// ---------- aliases ----------
+// ---------- masks (stored as aliases) ----------
 function AliasModal({ alias, model, onClose }: { alias?: string; model?: string; onClose: () => void }) {
-  const toast = useToast(), set = useSetAlias(), nodes = useAllNodes(), models = useAllModels(nodes.data), listId = useId();
+  const toast = useToast(), set = useSetAlias(), nodes = useAllNodes(), models = useAllModels(nodes.data), combos = useCombos(), listId = useId();
   const [a, setA] = useState(alias ?? ""), [m, setM] = useState(model ?? "");
-  const submit = () => set.mutate({ alias: a.trim(), model: m.trim() }, { onSuccess: () => { toast("ok", "Alias saved"); onClose(); }, onError: (e) => toast("err", errText(e)) });
+  const submit = () => set.mutate({ alias: a.trim(), model: m.trim() }, { onSuccess: () => { toast("ok", "Mask saved"); onClose(); }, onError: (e) => toast("err", errText(e)) });
   return (
-    <Modal open onClose={onClose} title={alias ? "Edit alias" : "New alias"}
+    <Modal open onClose={onClose} title={alias ? "Edit mask" : "New mask"}
       footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" loading={set.isPending} disabled={!a.trim() || !m.trim()} onClick={submit}>Save</Button></>}>
-      <Field label="Alias" hint="The short name clients will send as the model">{(id) => <Input id={id} className="font-mono" value={a} onChange={(e) => setA(e.target.value)} disabled={!!alias} placeholder="fast" />}</Field>
-      <Field label="Target model" hint="prefix/model — pick a known model or type one">
+      <Field label="Masked name" hint="The name clients will send as the model">{(id) => <Input id={id} className="font-mono" value={a} onChange={(e) => setA(e.target.value)} disabled={!!alias} placeholder="fast" />}</Field>
+      <Field label="Real model or combo" hint="prefix/model or a combo name — pick one or type it">
         {(id) => <><Input id={id} list={listId} className="font-mono" value={m} onChange={(e) => setM(e.target.value)} placeholder="openai/gpt-4o-mini" />
-          <datalist id={listId}>{models.data?.map((x) => <option key={x} value={x} />)}</datalist></>}
+          <datalist id={listId}>{[...(combos.data ?? []).map((c) => c.name), ...(models.data ?? [])].map((x) => <option key={x} value={x} />)}</datalist></>}
       </Field>
     </Modal>
   );
@@ -27,13 +27,13 @@ function Aliases() {
   const toast = useToast(), q = useAliases(), del = useDeleteAlias();
   const [edit, setEdit] = useState<{ alias?: string; model?: string } | null>(null), [rm, setRm] = useState<string | null>(null);
   const rows = Object.entries(q.data ?? {}).sort(([x], [y]) => x.localeCompare(y));
-  const add = <Button variant="primary" size="sm" onClick={() => setEdit({})}><Plus className="size-4" />Add alias</Button>;
+  const add = <Button variant="primary" size="sm" onClick={() => setEdit({})}><Plus className="size-4" />Add mask</Button>;
   return (
     <Card className="mb-6">
-      <div className="px-4 h-12 flex items-center justify-between border-b border-border"><h2 className="font-semibold">Aliases</h2>{add}</div>
+      <div className="px-4 h-12 flex items-center justify-between border-b border-border"><h2 className="font-semibold">Masked names</h2>{add}</div>
       {q.isLoading ? <Skeleton className="h-20 m-4" /> : rows.length ? (
         <div className="overflow-x-auto"><table className="w-full">
-          <thead><tr className="border-b border-border"><th className={th}>Alias</th><th className={th}>Target model</th><th className="w-24" /></tr></thead>
+          <thead><tr className="border-b border-border"><th className={th}>Masked name</th><th className={th}>Real model / combo</th><th className="w-24" /></tr></thead>
           <tbody className="divide-y divide-border">{rows.map(([a, m]) => (
             <tr key={a}>
               <td className="px-4 py-2 font-mono text-[13px]">{a}</td>
@@ -44,10 +44,10 @@ function Aliases() {
               </td>
             </tr>))}</tbody>
         </table></div>
-      ) : <EmptyState icon={<Tag className="size-6" />} title="No aliases" body="An alias is a short name that points at a full prefix/model, so clients can keep using a stable name while you switch the target." action={add} />}
+      ) : <EmptyState icon={<Tag className="size-6" />} title="No masked names" body="A mask is a name clients send instead of the real model or combo, so they keep a stable name while you switch what is behind it." action={add} />}
       {edit && <AliasModal {...edit} onClose={() => setEdit(null)} />}
-      <ConfirmModal open={!!rm} onClose={() => setRm(null)} loading={del.isPending} title="Delete alias" body={`Remove alias "${rm}"? Clients using it will get an error.`}
-        onConfirm={() => del.mutate(rm!, { onSuccess: () => { setRm(null); toast("ok", "Alias deleted"); }, onError: (e) => toast("err", errText(e)) })} />
+      <ConfirmModal open={!!rm} onClose={() => setRm(null)} loading={del.isPending} title="Delete mask" body={`Remove the masked name "${rm}"? Clients using it will get an error.`}
+        onConfirm={() => del.mutate(rm!, { onSuccess: () => { setRm(null); toast("ok", "Mask deleted"); }, onError: (e) => toast("err", errText(e)) })} />
     </Card>
   );
 }
@@ -107,7 +107,7 @@ function CustomModels() {
 export default function Models() {
   return (
     <>
-      <PageHeader title="Models" subtitle="Aliases and hand-registered models" />
+      <PageHeader title="Model Masking" subtitle="Masked names for models and combos, and hand-registered models" />
       <Aliases />
       <CustomModels />
     </>

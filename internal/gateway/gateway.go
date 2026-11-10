@@ -4,6 +4,7 @@ package gateway
 import (
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -275,6 +276,23 @@ func (g *Gateway) visibleModels(key string) ([]modelItem, error) {
 		for _, c := range combos {
 			if acc.allowsCombo(c.Name) {
 				data = append(data, modelItem{c.Name, "model", 0, "combo"})
+			}
+		}
+	}
+	// masked names (aliases) are listed when what they point at is listed for this key, so a mask never widens access
+	listed := map[string]bool{}
+	for _, d := range data {
+		listed[strings.ToLower(d.ID)] = true
+	}
+	for _, ms := range byNode {
+		for _, m := range ms {
+			listed[strings.ToLower(m.ID)] = true
+		}
+	}
+	if aliases, err := g.Store.Aliases(); err == nil {
+		for _, name := range slices.Sorted(maps.Keys(aliases)) {
+			if !listed[strings.ToLower(name)] && listed[strings.ToLower(aliases[name])] {
+				data = append(data, modelItem{name, "model", 0, "mask"})
 			}
 		}
 	}

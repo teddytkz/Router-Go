@@ -140,8 +140,8 @@ func (a *API) setAlias(w http.ResponseWriter, r *http.Request) {
 	case in.Alias == "" || strings.Contains(in.Alias, "/"):
 		writeErr(w, 400, "alias is required and must not contain '/'")
 		return
-	case !strings.Contains(in.Model, "/"):
-		writeErr(w, 400, "model must be '<prefix>/<model>'")
+	case !strings.Contains(in.Model, "/") && !a.isCombo(in.Model): // a bare name can only mask a combo
+		writeErr(w, 400, "target must be '<prefix>/<model>' or the name of a combo")
 		return
 	}
 	if _, err := a.Store.ComboByName(in.Alias); err == nil {
@@ -154,6 +154,8 @@ func (a *API) setAlias(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{"success": true})
 }
+
+func (a *API) isCombo(name string) bool { _, err := a.Store.ComboByName(name); return err == nil }
 
 func (a *API) deleteAlias(w http.ResponseWriter, r *http.Request) {
 	if err := a.Store.DeleteAlias(r.URL.Query().Get("alias")); err != nil {

@@ -23,7 +23,7 @@ func (g *Gateway) accessFor(key string) *access {
 	}
 	a := &access{combos: map[string]bool{}, models: map[string]bool{}}
 	for _, e := range k.Access.Allow {
-		if c, err := g.Store.ComboByName(e); err == nil {
+		if c, err := g.Store.ComboByName(g.maskedCombo(e)); err == nil {
 			a.combos[strings.ToLower(c.Name)] = true
 			continue
 		}

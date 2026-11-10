@@ -4,18 +4,22 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useLogout } from "../lib/hooks";
 import { cn, Button } from "./ui";
 
-const nav = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/dashboard/providers", label: "Providers", icon: Server },
-  { to: "/dashboard/proxy-pools", label: "Proxy Pools", icon: Network },
-  { to: "/dashboard/combos", label: "Combos", icon: Layers },
-  { to: "/dashboard/models", label: "Models", icon: Boxes },
-  { to: "/dashboard/token-saver", label: "Token Saver", icon: Gauge },
-  { to: "/dashboard/api-keys", label: "API Keys", icon: KeyRound },
-  { to: "/dashboard/usage", label: "Usage", icon: Activity },
-  { to: "/dashboard/quota", label: "Quota Tracker", icon: Hourglass },
-  { to: "/dashboard/console-log", label: "Console Log", icon: Terminal },
-  { to: "/dashboard/settings", label: "Settings", icon: Settings },
+const sections = [
+  { title: "", items: [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
+    { to: "/dashboard/providers", label: "Providers", icon: Server },
+    { to: "/dashboard/combos", label: "Combos", icon: Layers },
+    { to: "/dashboard/usage", label: "Usage", icon: Activity },
+    { to: "/dashboard/token-saver", label: "Token Saver", icon: Gauge },
+    { to: "/dashboard/quota", label: "Quota Tracker", icon: Hourglass },
+  ] },
+  { title: "System", items: [
+    { to: "/dashboard/model-masking", label: "Model Masking", icon: Boxes },
+    { to: "/dashboard/proxy-pools", label: "Proxy Pools", icon: Network },
+    { to: "/dashboard/api-keys", label: "API Keys", icon: KeyRound },
+    { to: "/dashboard/console-log", label: "Console Log", icon: Terminal },
+    { to: "/dashboard/settings", label: "Settings", icon: Settings },
+  ] },
 ];
 
 function useTheme() {
@@ -50,13 +54,18 @@ export default function Layout() {
   const sidebar = (
     <div className="flex h-full flex-col">
       <div className="h-14 px-4 flex items-center border-b border-border"><Logo /></div>
-      <nav className="flex-1 p-3 space-y-0.5" aria-label="Main">
-        {nav.map(({ to, label, icon: Icon, end }) => (
-          <NavLink key={to} to={to} end={end}
-            className={({ isActive }) => cn("flex items-center gap-3 rounded-lg px-3 h-9 text-sm font-medium transition-colors",
-              isActive ? "bg-accent-soft text-accent" : "text-muted hover:bg-surface-2 hover:text-text")}>
-            <Icon className="size-[18px]" />{label}
-          </NavLink>
+      <nav className="flex-1 overflow-y-auto p-3 space-y-4" aria-label="Main">
+        {sections.map((sec) => (
+          <div key={sec.title || "main"} className="space-y-0.5">
+            {sec.title && <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">{sec.title}</div>}
+            {sec.items.map(({ to, label, icon: Icon, end }) => (
+              <NavLink key={to} to={to} end={end}
+                className={({ isActive }) => cn("flex items-center gap-3 rounded-lg px-3 h-9 text-sm font-medium transition-colors",
+                  isActive ? "bg-accent-soft text-accent" : "text-muted hover:bg-surface-2 hover:text-text")}>
+                <Icon className="size-[18px]" />{label}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
       <div className="p-3 border-t border-border flex items-center gap-1">

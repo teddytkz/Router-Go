@@ -4,7 +4,7 @@ import { CapacityAdapter } from "../components/CapacityAdapter";
 import { CapBadges } from "../components/CapBadges";
 import { ComboMembers } from "../components/ComboMembers";
 import { ModelPicker, type PickGroup } from "../components/ModelPicker";
-import { Badge, Button, Card, ConfirmModal, EmptyState, errText, Field, Input, Modal, PageHeader, Select, Skeleton, useToast } from "../components/ui";
+import { Badge, Button, Card, ConfirmModal, CopyButton, EmptyState, errText, Field, Input, Modal, PageHeader, Select, Skeleton, useToast } from "../components/ui";
 import type { Combo, ComboStrategy } from "../lib/api";
 import { useAliases, useAllModels, useCapsMap, useCombos, useAllNodes, useDeleteCombo, useSaveCombo } from "../lib/hooks";
 
@@ -29,7 +29,7 @@ function ComboModal({ combo, onClose }: { combo?: Combo; onClose: () => void }) 
       byPrefix.set(p, [...(byPrefix.get(p) ?? []), m]);
     }
     const out: PickGroup[] = [...byPrefix].map(([prefix, ms]) => ({ key: prefix, label: nodes.data?.find((n) => n.prefix === prefix)?.name ?? prefix, models: ms }));
-    const al = Object.keys(aliases.data ?? {});
+    const al = Object.entries(aliases.data ?? {}).filter(([, t]) => t.includes("/")).map(([k]) => k); // an alias masking a combo cannot nest in one
     return al.length ? [...out, { key: "__aliases", label: "Aliases", models: al }] : out;
   }, [models.data, nodes.data, aliases.data]);
   const available = useMemo(() => new Set(groups.flatMap((g) => g.models.map((m) => m.toLowerCase()))), [groups]);
@@ -69,6 +69,7 @@ function ComboCard({ combo, onEdit }: { combo: Combo; onEdit: () => void }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <h2 className="font-semibold font-mono break-all">{combo.name}</h2>
+          <CopyButton value={combo.name} label={`Copy ${combo.name}`} />
           <Badge tone="accent">{STRATEGY[combo.strategy]?.label ?? combo.strategy}</Badge>
           <Badge>{combo.models.length} model{combo.models.length === 1 ? "" : "s"}</Badge>
         </div>

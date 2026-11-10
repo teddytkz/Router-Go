@@ -197,6 +197,22 @@ func TestCombosFallbackAndRoundRobin(t *testing.T) {
 	if strings.Join(hits, ",") != "a,b,a,b" {
 		t.Fatalf("round-robin order = %v", hits)
 	}
+
+	// an alias can mask a combo: requests under the masked name are routed (and rotated) as the combo
+	e.store.SetAlias("masked", "rr")
+	hits = nil
+	for range 2 {
+		if resp = e.chat(`{"model":"masked","messages":[]}`, e.apiKey); resp.StatusCode != 200 {
+			t.Fatalf("masked combo status=%d", resp.StatusCode)
+		}
+	}
+	if strings.Join(hits, ",") != "a,b" {
+		t.Fatalf("masked combo order = %v", hits)
+	}
+	e.store.SetAlias("dangling", "gone")
+	if got := e.models(e.apiKey); !has(got, "masked") || has(got, "dangling") {
+		t.Errorf("/v1/models must list a mask of a listed combo and skip one with no target: %v", got)
+	}
 }
 
 func TestKeyAccessAndCustomModels(t *testing.T) {
@@ -237,11 +253,12 @@ func TestKeyAccessAndCustomModels(t *testing.T) {
 		t.Errorf("alias to allowed model: %d", got)
 	}
 
-	if got := e.models(restricted.Key); len(got) != 2 || !has(got, "team") || !has(got, "mock/up2") {
+	// masks are listed only where their target is: alias2 → mock/up2 is granted, fast → mock/up1 is not
+	if got := e.models(restricted.Key); len(got) != 3 || !has(got, "team") || !has(got, "mock/up2") || !has(got, "alias2") || has(got, "fast") {
 		t.Errorf("restricted /v1/models = %v", got)
 	}
 	all := e.models(e.apiKey)
-	for _, want := range []string{"team", "mock/up1", "mock/up2", "mock/extra"} { // only added models are listed (the upstream also reports "other")
+	for _, want := range []string{"team", "mock/up1", "mock/up2", "mock/extra", "fast", "alias2"} { // only added models are listed (the upstream also reports "other")
 		if !has(all, want) {
 			t.Errorf("unrestricted /v1/models missing %s: %v", want, all)
 		}
@@ -307,6 +324,11 @@ func TestDashboardPhase2API(t *testing.T) {
 	if _, out = call("GET", "/api/models/alias", ""); out["aliases"].(map[string]any)["fast"] != "mock/a" {
 		t.Errorf("aliases = %v", out)
 	}
+	st, _ = call("PUT", "/api/models/alias", `{"alias":"smart","model":"better"}`) // "better" was deleted above
+	expect("alias to a missing combo", st, 400)
+	call("POST", "/api/combos", `{"name":"masktarget","models":["mock/a"]}`)
+	st, _ = call("PUT", "/api/models/alias", `{"alias":"smart","model":"masktarget"}`)
+	expect("alias masking a combo", st, 200)
 	st, _ = call("DELETE", "/api/models/alias?alias=fast", "")
 	expect("delete alias", st, 200)
 

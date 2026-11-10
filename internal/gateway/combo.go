@@ -26,7 +26,8 @@ func (e *resolveError) Error() string { return e.msg }
 // members (rotated for round-robin); everything else is a single target.
 func (g *Gateway) plan(requested string) (combo *db.Combo, targets []target, err error) {
 	if !strings.Contains(requested, "/") {
-		if c, cerr := g.Store.ComboByName(requested); cerr == nil {
+		name := g.maskedCombo(requested)
+		if c, cerr := g.Store.ComboByName(name); cerr == nil {
 			if len(c.Models) == 0 {
 				return c, nil, errNoModels
 			}
@@ -54,6 +55,18 @@ func (g *Gateway) plan(requested string) (combo *db.Combo, targets []target, err
 		return nil, nil, rerr
 	}
 	return nil, []target{{node: n, model: model, label: n.Prefix() + "/" + model}}, nil
+}
+
+// maskedCombo follows an alias that masks a combo ("fast" -> combo "smart-coder"); any other name is returned as is.
+// A real combo of that name always wins over an alias.
+func (g *Gateway) maskedCombo(name string) string {
+	if _, err := g.Store.ComboByName(name); err == nil {
+		return name
+	}
+	if a, ok := g.Store.Alias(name); ok && !strings.Contains(a, "/") {
+		return a
+	}
+	return name
 }
 
 type rotation struct{ idx, used int }
