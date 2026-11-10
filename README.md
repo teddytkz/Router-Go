@@ -1,138 +1,138 @@
 # Router-Go
 
-Gateway AI dengan dashboard web, satu binary Go (dashboard React di-embed). Satu endpoint untuk banyak provider: klien cukup bicara format OpenAI, Anthropic, Gemini atau Ollama, Router-Go menerjemahkan, memilih key, dan melakukan fallback.
+An AI gateway with a web dashboard, shipped as a single Go binary (the React dashboard is embedded). One endpoint for many providers: clients speak OpenAI, Anthropic, Gemini or Ollama format, and Router-Go translates, picks a key, and falls back when one fails.
 
-Ditulis ulang dari XRouter-Next ke Go. Skema database sama dengan XRouter-Next.
+Rewritten from XRouter-Next in Go. The database schema is the same as XRouter-Next.
 
-Dokumen lain: [`docs/PRD.md`](docs/PRD.md) · [`docs/PORTING_CHECKLIST.md`](docs/PORTING_CHECKLIST.md)
+More docs: [`docs/PRD.md`](docs/PRD.md) · [`docs/PORTING_CHECKLIST.md`](docs/PORTING_CHECKLIST.md)
 
-## Fitur
+## Features
 
-- **Banyak format, satu gateway.** Request dan response diterjemahkan antar format `chat/completions`, `responses`, `messages` (Anthropic) dan Gemini.
-- **Provider.** Built-in (lihat tabel di bawah) dan custom node OpenAI-compatible atau Anthropic-compatible dengan prefix sendiri.
-- **Key pool + fallback.** Beberapa key per provider dengan prioritas, round-robin atau sticky. Key yang kena rate limit atau ditolak otomatis dilewati, ada cooldown dan circuit breaker.
-- **Combo.** Satu nama model yang berisi beberapa model, dicoba berurutan.
-- **Model masking.** Nama alias yang dikirim klien (`fast`) dipetakan ke model atau combo sungguhan, jadi isi di belakangnya bisa diganti tanpa mengubah klien.
-- **Custom model.** Daftarkan model manual untuk upstream yang tidak punya endpoint `/models`. Capability (vision, reasoning, audio, context window) bisa di-override.
-- **API key gateway** dengan access list per key.
-- **Proxy pools.** Arahkan traffic sebuah key lewat proxy (http/https/socks5), atau lewat relay yang di-deploy ke akun Vercel atau Cloudflare milikmu.
-- **Usage, quota, console log, token saver** di dashboard.
+- **Many formats, one gateway.** Requests and responses are translated between `chat/completions`, `responses`, `messages` (Anthropic) and Gemini.
+- **Providers.** Built-in ones (see the table below) plus custom OpenAI-compatible or Anthropic-compatible nodes with your own prefix.
+- **Key pool and fallback.** Several keys per provider with priority, round-robin or sticky selection. Keys that are rate-limited or rejected are skipped automatically, with cooldown and a circuit breaker.
+- **Combos.** One model name that wraps several models, tried in order.
+- **Model masking.** A name clients send (`fast`) maps to a real model or combo, so you can swap what is behind it without touching clients.
+- **Custom models.** Register models by hand for upstreams that have no `/models` endpoint. Capabilities (vision, reasoning, audio, context window) can be overridden.
+- **Gateway API keys** with a per-key access list.
+- **Proxy pools.** Route a key's traffic through a proxy (http/https/socks5), or through a relay you deploy to your own Vercel or Cloudflare account.
+- **Usage, quota, console log and token saver** in the dashboard.
 
-## Provider built-in
+## Built-in providers
 
-| Provider | Prefix | Login | Status |
+| Provider | Prefix | Sign-in | Status |
 |---|---|---|---|
-| OpenCode Free | `oc` | tanpa key | terbukti live |
-| Freebuff | `fb` | tanpa key, lewat CLI resmi vendor | terbukti live |
+| OpenCode Free | `oc` | no key | live-verified |
+| Freebuff | `fb` | no key, through the vendor's official CLI | live-verified |
 | Cline | `cl` | OAuth | ready |
-| CodeBuddy | `cbai` | OAuth | uji dengan mock |
-| Qoder | `qd` | Personal Access Token (`pt-…`) | uji dengan mock |
-| Kiro | `kr` | OAuth AWS Builder ID, atau tempel refresh token / JSON | experimental |
+| CodeBuddy | `cbai` | OAuth | tested against mocks only |
+| Qoder | `qd` | Personal Access Token (`pt-…`) | tested against mocks only |
+| Kiro | `kr` | OAuth (AWS Builder ID), or paste a refresh token / JSON | experimental |
 
-Provider berstatus *experimental* bisa ditolak upstream sewaktu-waktu. Tiap provider ada di `internal/provider/<nama>` dan mendaftar lewat `provider.Register`.
+*Experimental* providers may be rejected by the upstream at any time. Each provider lives in `internal/provider/<name>` and registers itself with `provider.Register`.
 
-## Mulai cepat
+## Quick start
 
-Butuh Go dan [Bun](https://bun.sh).
+Requires Go and [Bun](https://bun.sh).
 
 ```bash
-make build            # build dashboard (web/dist) lalu binary ./router-go
+make build            # builds the dashboard (web/dist), then the ./router-go binary
 ./router-go           # http://localhost:20128
 ```
 
-Tanpa `make`:
+Without `make`:
 
 ```bash
 cd web && bun install && bun run build && cd ..
 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o router-go ./cmd/router-go
 ```
 
-Login pertama: password awal `123456`, **hanya bisa dari localhost**. Ganti segera di Settings. Dashboard yang dibuka dari luar menolak password bawaan.
+First login: the initial password is `123456`, **accepted from localhost only**. Change it in Settings right away. A dashboard opened from another machine rejects the default password.
 
 ```bash
-./router-go --port 8080          # port lain
-./router-go --reset-password     # lupa password
+./router-go --port 8080          # another port
+./router-go --reset-password     # forgot the password
 ```
 
-Urutan prioritas port: `--port` > env `PORT` / `ROUTER_GO_ADDR` > Settings > `20128`. Port juga bisa diubah di **Settings → Port**, server pindah saat itu juga tanpa restart.
+Port priority: `--port` > env `PORT` / `ROUTER_GO_ADDR` > Settings > `20128`. The port can also be changed in **Settings → Port**; the server moves immediately, no restart needed.
 
-## Cara pakai
+## Usage
 
-1. Buka **Providers**, pilih provider built-in atau buat node custom (beri prefix, mis. `mygw`).
-2. Tambah key (**API Key**) atau login lewat **OAuth** di halaman provider.
-3. Buat API key gateway di **API Keys**.
-4. Panggil gateway:
+1. Open **Providers**, pick a built-in provider or create a custom node (give it a prefix, e.g. `mygw`).
+2. Add a key (**API Key**) or sign in with **OAuth** on the provider page.
+3. Create a gateway API key under **API Keys**.
+4. Call the gateway:
 
 ```bash
 curl localhost:20128/v1/chat/completions \
   -H "Authorization: Bearer <api-key>" \
   -H "Content-Type: application/json" \
-  -d '{"model":"mygw/<model>","messages":[{"role":"user","content":"halo"}]}'
+  -d '{"model":"mygw/<model>","messages":[{"role":"user","content":"hello"}]}'
 ```
 
-Nama model memakai format `prefix/model`, atau nama combo, atau nama mask. Daftar model yang tersedia: `GET /v1/models`.
+A model name is `prefix/model`, a combo name, or a mask name. List what is available with `GET /v1/models`.
 
-## Endpoint gateway
+## Gateway endpoints
 
-Autentikasi: header `Authorization: Bearer <api-key>`. Cookie tidak pernah dipakai di `/v1`.
+Authentication: `Authorization: Bearer <api-key>` header. Cookies are never used on `/v1`.
 
-| Endpoint | Fungsi |
+| Endpoint | Purpose |
 |---|---|
-| `POST /v1/chat/completions` | Chat (format OpenAI) |
+| `POST /v1/chat/completions` | Chat (OpenAI format) |
 | `POST /v1/responses`, `/v1/responses/compact` | Responses API |
-| `POST /v1/messages`, `/v1/messages/count_tokens` | Format Anthropic |
-| `POST /v1/embeddings` | Embedding |
-| `POST /v1/images/generations` | Gambar |
-| `POST /v1/audio/speech`, `/v1/audio/transcriptions` | Suara |
+| `POST /v1/messages`, `/v1/messages/count_tokens` | Anthropic format |
+| `POST /v1/embeddings` | Embeddings |
+| `POST /v1/images/generations` | Images |
+| `POST /v1/audio/speech`, `/v1/audio/transcriptions` | Audio |
 | `POST /v1/videos/generations`, `/edits`, `/extensions`; `GET /v1/videos/{id}` | Video |
-| `GET /v1/models`, `/v1/models/info`, `/v1/models/*` | Daftar dan detail model |
-| `POST /v1/api/chat` | Format Ollama |
-| `GET/POST /v1beta/models/*` | Format Gemini |
+| `GET /v1/models`, `/v1/models/info`, `/v1/models/*` | Model list and details |
+| `POST /v1/api/chat` | Ollama format |
+| `GET/POST /v1beta/models/*` | Gemini format |
 
 ## Dashboard
 
-Ada di `/dashboard`: Providers, Combos, Model Masking, Token Saver, API Keys, Console Log, Usage, Proxy Pools, Quota, Settings.
+Served at `/dashboard`: Providers, Combos, Model Masking, Token Saver, API Keys, Console Log, Usage, Proxy Pools, Quota, Settings.
 
-**Keamanan:** satu password (tanpa username) disimpan sebagai hash bcrypt. Login sukses mengeluarkan JWT (HS256, berlaku 24 jam) di cookie `auth_token` yang `HttpOnly`. Ada pembatas percobaan login. Token sesi tidak bisa dicabut sebelum kedaluwarsa.
+**Security:** a single password (no username) stored as a bcrypt hash. A successful login issues a JWT (HS256, valid for 24 hours) in an `HttpOnly` `auth_token` cookie. Login attempts are rate-limited. A session token cannot be revoked before it expires.
 
-## Konfigurasi
+## Configuration
 
-Data disimpan di `~/.router-go` (Windows: `%USERPROFILE%\.router-go`), database di `db/data.sqlite`. Secret JWT dibuat otomatis dan disimpan di file `jwt-secret` di folder itu, jadi sesi tetap valid setelah restart.
+Data lives in `~/.router-go` (Windows: `%USERPROFILE%\.router-go`); the database is `db/data.sqlite`. The JWT secret is generated on first run and saved in a `jwt-secret` file in that folder, so sessions survive restarts.
 
-| Env | Fungsi |
+| Env | Purpose |
 |---|---|
-| `PORT`, `ROUTER_GO_ADDR` | Port, atau `host:port` |
-| `HOSTNAME_BIND` | Alamat bind, kosong = semua interface |
-| `ROUTER_GO_DATA_DIR` / `DATA_DIR` | Folder data |
-| `INITIAL_PASSWORD` | Password awal |
-| `JWT_SECRET` | Secret JWT (default: dibuat otomatis) |
-| `API_KEY_SECRET` | Secret untuk API key gateway |
-| `AUTH_COOKIE_SECURE=true` | Paksa flag `Secure` pada cookie (otomatis aktif lewat HTTPS) |
-| `TRUST_PROXY=true` | Percayai header proxy di depan Router-Go |
+| `PORT`, `ROUTER_GO_ADDR` | Port, or `host:port` |
+| `HOSTNAME_BIND` | Bind address; empty means all interfaces |
+| `ROUTER_GO_DATA_DIR` / `DATA_DIR` | Data folder |
+| `INITIAL_PASSWORD` | Initial password |
+| `JWT_SECRET` | JWT secret (default: generated automatically) |
+| `API_KEY_SECRET` | Secret for gateway API keys |
+| `AUTH_COOKIE_SECURE=true` | Force the `Secure` cookie flag (on automatically over HTTPS) |
+| `TRUST_PROXY=true` | Trust proxy headers from a reverse proxy in front of Router-Go |
 
-Kalau Router-Go dipasang di belakang reverse proxy HTTPS, set `TRUST_PROXY=true` dan pastikan proxy mengirim `X-Forwarded-Proto`.
+Behind an HTTPS reverse proxy, set `TRUST_PROXY=true` and make sure the proxy sends `X-Forwarded-Proto`.
 
-## Struktur
+## Project layout
 
 ```
 cmd/router-go/       entry point
-internal/api/        API dashboard (/api) dan SPA
-internal/gateway/    gateway /v1: routing, key pool, fallback, breaker
-internal/translate/  terjemah antar format (OpenAI, Anthropic, Gemini)
-internal/provider/   provider built-in (cline, codebuddy, freebuff, kiro, opencode-free, qoder)
-internal/auth/       login dashboard (bcrypt + JWT) dan limiter
-internal/db/         SQLite: koneksi, key, alias, usage
-internal/relay/      relay Vercel/Cloudflare untuk proxy pool
-web/                 dashboard React (Vite + TypeScript)
+internal/api/        dashboard API (/api) and the SPA
+internal/gateway/    /v1 gateway: routing, key pool, fallback, breaker
+internal/translate/  format translation (OpenAI, Anthropic, Gemini)
+internal/provider/   built-in providers (cline, codebuddy, freebuff, kiro, opencode-free, qoder)
+internal/auth/       dashboard login (bcrypt + JWT) and login limiter
+internal/db/         SQLite: connections, keys, aliases, usage
+internal/relay/      Vercel/Cloudflare relay for proxy pools
+web/                 React dashboard (Vite + TypeScript)
 ```
 
-## Pengembangan
+## Development
 
 ```bash
-make dev                  # Go dengan live reload (air) di :20128
-cd web && bun run dev     # Vite :5173, mem-proxy ke :20128
+make dev                  # Go with live reload (air) on :20128
+cd web && bun run dev     # Vite on :5173, proxies to :20128
 ```
 
-Pasang `air`: `go install github.com/air-verse/air@latest`. Config di `.air.toml`. Untuk backend di port lain: `ROUTER_GO_PORT=8080 bun run dev`.
+Install `air` with `go install github.com/air-verse/air@latest`; its config is `.air.toml`. For a backend on another port: `ROUTER_GO_PORT=8080 bun run dev`.
 
-Test: `make test`, sama dengan `go vet ./... && go test ./... && (cd web && bun run typecheck)`.
+Tests: `make test`, which runs `go vet ./... && go test ./... && (cd web && bun run typecheck)`.
