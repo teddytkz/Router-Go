@@ -37,9 +37,7 @@ function useTheme() {
 export function Logo() {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-[#4f8cff] to-[#1d4ed8] text-white shadow-md">
-        <svg viewBox="0 0 32 32" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 22V10h6.5a3.5 3.5 0 010 7H8m8 0l5 5" /></svg>
-      </div>
+      <img src="/logo.svg" alt="" aria-hidden className="size-8 shrink-0 rounded-lg shadow-md" />
       <span className="font-semibold tracking-tight text-[15px]">Router<span className="text-accent">-Go</span></span>
     </div>
   );
