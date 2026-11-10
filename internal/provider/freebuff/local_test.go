@@ -123,6 +123,26 @@ func TestAdmissionNoticeReadsTheRefusal(t *testing.T) {
 	}
 }
 
+func TestTypableKeepsTextAndDropsKeystrokes(t *testing.T) {
+	got := typable("a\r\nb\rc\x1b[31mred\x1b[0m\td\x00\x7f é日本")
+	if want := "a\nb\nc[31mred[0m    d é日本"; got != want {
+		t.Errorf("typable = %q, want %q", got, want)
+	}
+}
+
+func TestTakeoverOffered(t *testing.T) {
+	box := "│ Limited access without a subscription allows one session. Take over to stop the other session. │\n│ Enter: take over  Esc: back to draft │"
+	if !takeoverOffered(box) {
+		t.Error("the single-session box was not recognised")
+	}
+	// the other boxes spend hours or ask for a model, so they must never be auto-answered
+	for _, other := range []string{"│ Enter: choose another model  Esc: back to draft │", "│ Enter: confirm and send  Esc: back to draft │", "Take over: Enter: take over"} {
+		if takeoverOffered(other) {
+			t.Errorf("%q was treated as a takeover", other)
+		}
+	}
+}
+
 func TestMessageCountCountsTurns(t *testing.T) {
 	dir := t.TempDir()
 	if messageCount(dir) != 0 {

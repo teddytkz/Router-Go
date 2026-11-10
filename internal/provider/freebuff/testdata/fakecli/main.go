@@ -66,6 +66,15 @@ func main() {
 		if prompt == "" {
 			continue
 		}
+		// a marker file makes the first prompt stop at the single-session box until Enter is pressed
+		if marker := filepath.Join(root, "takeover"); exists(marker) {
+			os.Remove(marker)
+			fmt.Println("│ Limited access without a subscription allows one session across CLI and Desktop. Take over to stop the other session and use it here. │")
+			fmt.Println("│ Enter: take over  Esc: back to draft │")
+			if c, err := in.ReadByte(); err != nil || !isEnter(c) {
+				return
+			}
+		}
 		turns = append(turns, turn("user", prompt))
 		write(log, turns)
 		time.Sleep(200 * time.Millisecond)
@@ -119,3 +128,5 @@ func write(path string, turns []any) {
 	raw, _ := json.Marshal(turns)
 	os.WriteFile(path, raw, 0o600)
 }
+
+func exists(path string) bool { _, err := os.Stat(path); return err == nil }

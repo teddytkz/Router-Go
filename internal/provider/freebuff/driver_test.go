@@ -68,6 +68,17 @@ func TestDriverTalksToATerminal(t *testing.T) {
 		t.Errorf("second answer = %q", got)
 	}
 
+	// a prompt line that starts with "-" must reach the CLI as text, not be parsed by tmux as a flag
+	if got, err = answer("m/one", "- item"); err != nil || got != "echo: - item" {
+		t.Fatalf("dash prompt: %q %v", got, err)
+	}
+
+	// the single-session box is answered with Enter and the turn then completes
+	os.WriteFile(filepath.Join(cfg, "takeover"), nil, 0o600)
+	if got, err = answer("m/one", "after takeover"); err != nil || got != "echo: after takeover" {
+		t.Fatalf("takeover call: %q %v", got, err)
+	}
+
 	// a different model is a different process, and its launch writes the model into the CLI's own settings and takes
 	// the catalogue key that would outrank it (applyFreebuffCatalog). The new process re-reads the profile at launch,
 	// so seeding it here is what it sees.

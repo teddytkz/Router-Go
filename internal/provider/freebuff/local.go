@@ -43,6 +43,9 @@ const (
 	// admissionFooter marks the CLI's admission box: the turn did not start, and the box says why
 	// (freebuff-chat-controls.tsx). Nothing reaches the chat log while it is up.
 	admissionFooter = "Esc: back to draft"
+	// takeoverGrace is how long after taking a session over the box may still be on screen before it counts as a
+	// second refusal (the other client took the session back).
+	takeoverGrace = 6 * time.Second
 )
 
 // opts are the per-connection knobs, read from providerSpecificData so an operator can point the driver at another
@@ -189,6 +192,7 @@ func (c *client) ask(ctx context.Context, model, prompt string) (string, error) 
 // answer by the log growing — not by a new directory appearing. A prompt that never reached the CLI ends at the
 // deadline with the pane tail in the error, which is the diagnostic for that case.
 func (c *client) awaitAnswer(ctx context.Context, base string, baseCount int, deadline time.Time) (string, error) {
+	var tookOver time.Time
 	for {
 		if err := ctx.Err(); err != nil {
 			return "", err
@@ -199,8 +203,19 @@ func (c *client) awaitAnswer(ctx context.Context, base string, baseCount int, de
 		// The CLI holds a sent message in an admission box when it will not start the model — no hours for it, or a
 		// session to take over (freebuff-chat-controls.tsx). Nothing reaches the chat log while that box is up, so
 		// waiting the deadline out would blame a slow provider for what is really a refusal, and hide the reason.
-		if notice := admissionNotice(c.pane()); notice != "" {
-			return "", errors.New(notice)
+		pane := c.pane()
+		// A free account holds one session across CLI and Desktop; the box offers to take it over. That costs no hours
+		// and the operator asked for this router to own the session, so it is confirmed — once per turn, so a client
+		// that keeps stealing it back ends in an error instead of a tug of war.
+		if tookOver.IsZero() && takeoverOffered(pane) {
+			if err := c.sendKeys(ctx, "\r"); err != nil {
+				return "", err
+			}
+			tookOver = time.Now()
+		} else if tookOver.IsZero() || time.Since(tookOver) > takeoverGrace {
+			if notice := admissionNotice(pane); notice != "" {
+				return "", errors.New(notice)
+			}
 		}
 		if dir := c.newestChat(); dir != "" && (dir != base || messageCount(dir) > baseCount) {
 			if text, done := readAnswer(dir); done {
@@ -215,8 +230,8 @@ func (c *client) awaitAnswer(ctx context.Context, base string, baseCount int, de
 // stands in as a progress line while a session is simply starting ("Starting your model session…", with no Enter
 // hint), so only a box offering an Enter action counts: that is the CLI stopped on a human decision — not enough
 // hours, a session to take over, or a charge to confirm — and a driver that cannot answer it would otherwise sit
-// until the deadline and blame a slow provider. The verdict is deliberately not auto-answered, because confirming one
-// spends the operator's hours. The box draws its message above the key hints, so the lines back from the hint carry
+// until the deadline and blame a slow provider. The verdict is deliberately not auto-answered (except a session takeover, see
+// takeoverOffered), because confirming the others spends the operator's hours. The box draws its message above the key hints, so the lines back from the hint carry
 // the whole reason even after it wraps.
 func admissionNotice(pane string) string {
 	lines := strings.Split(pane, "\n")
@@ -233,6 +248,17 @@ func admissionNotice(pane string) string {
 		return "freebuff held the request: " + strings.Join(parts, " ")
 	}
 	return ""
+}
+
+// takeoverOffered reports whether the admission box is asking to take over the account's single session
+// ("Enter: take over"). Unlike the hours or confirm-and-send boxes, answering it spends nothing.
+func takeoverOffered(pane string) bool {
+	for _, ln := range strings.Split(pane, "\n") {
+		if strings.Contains(ln, admissionFooter) && strings.Contains(strings.ToLower(ln), "enter: take over") {
+			return true
+		}
+	}
+	return false
 }
 
 // newestChat is the chat directory the CLI most recently wrote for this project. The CLI keys projects by the base
@@ -409,10 +435,29 @@ func (c *client) saveModel(model string) error {
 	return os.WriteFile(path, out, 0o600)
 }
 
+// typable makes prompt text safe to type into a terminal: send-keys -l passes every byte through as a key, so a lone
+// CR would submit the message early, ESC would start a key sequence (tool output often carries ANSI colour codes),
+// and a Tab would trigger completion. Line breaks are normalised to \n, tabs become spaces, and every other
+// control character is dropped.
+func typable(s string) string {
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\r", "\n")
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n':
+			return r
+		case r == '\t':
+			return ' '
+		case r < 0x20 || (r >= 0x7f && r < 0xa0):
+			return -1
+		}
+		return r
+	}, strings.ReplaceAll(s, "\t", "    "))
+}
+
 // typePrompt puts the prompt in the box and submits it. Newlines go in as Alt+Enter so a multi-line prompt stays one
 // message; the text and the Return are sent separately so tmux does not swallow the last character.
 func (c *client) typePrompt(ctx context.Context, prompt string) error {
-	lines := strings.Split(strings.ReplaceAll(prompt, "\r\n", "\n"), "\n")
+	lines := strings.Split(typable(prompt), "\n")
 	for i, ln := range lines {
 		if err := c.sendKeys(ctx, ln); err != nil {
 			return err
@@ -448,7 +493,7 @@ func (c *client) tail() string {
 }
 
 func (c *client) sendKeys(ctx context.Context, keys string) error {
-	cmd := exec.CommandContext(ctx, "tmux", "send-keys", "-t", c.tmux, "-l", keys)
+	cmd := exec.CommandContext(ctx, "tmux", "send-keys", "-t", c.tmux, "-l", "--", keys) // "--": a prompt line starting with "-" is text, not a flag
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("freebuff: tmux send-keys failed: %v: %s", err, strings.TrimSpace(string(out)))
 	}
