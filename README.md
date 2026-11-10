@@ -36,16 +36,11 @@ More docs: [`docs/PRD.md`](docs/PRD.md) · [`docs/PORTING_CHECKLIST.md`](docs/PO
 Requires Go and [Bun](https://bun.sh).
 
 ```bash
-make build            # builds the dashboard (web/dist), then the ./router-go binary
+./build.sh            # builds the dashboard (web/dist), then the ./router-go binary
 ./router-go           # http://localhost:20128
 ```
 
-Without `make`:
-
-```bash
-cd web && bun install && bun run build && cd ..
-CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o router-go ./cmd/router-go
-```
+`make build` does the same. To cross-compile, set the target: `GOOS=windows GOARCH=amd64 ./build.sh` (produces `router-go.exe`).
 
 First login: the initial password is `123456`, **accepted from localhost only**. Change it in Settings right away. A dashboard opened from another machine rejects the default password.
 
