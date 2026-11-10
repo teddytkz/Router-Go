@@ -74,7 +74,7 @@ func New(store *db.Store) *Gateway {
 // and it still goes through proxy pools like the shared one.
 func (g *Gateway) clientFor(node *db.Node) *http.Client {
 	p, ok := node.Builtin()
-	if !ok || p.Transport == nil {
+	if !ok || (p.Transport == nil && !p.DirectOnly) {
 		return g.Client
 	}
 	g.mu.Lock()
@@ -85,7 +85,13 @@ func (g *Gateway) clientFor(node *db.Node) *http.Client {
 	if g.clients == nil {
 		g.clients = map[string]*http.Client{}
 	}
-	c := &http.Client{Transport: newPoolTransport(g.Store, p.Transport())}
+	base := baseTransport()
+	if p.Transport != nil {
+		base = p.Transport()
+	}
+	c := &http.Client{Transport: newPoolTransport(g.Store, base)}
+	pt := c.Transport.(*poolTransport)
+	pt.directOnly, pt.proxyDial, pt.run = p.DirectOnly, p.ProxyDialer, p.ProxyRun
 	g.clients[node.ID] = c
 	return c
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -304,5 +305,73 @@ func TestTransportRepeatsHandshake(t *testing.T) {
 			t.Fatalf("handshake %d: %v", i, err)
 		}
 		resp.Body.Close()
+	}
+}
+
+// TestTransportThroughConnectProxy: the fingerprint must run inside the proxy's tunnel, end to end with the target, and
+// the DNS name the proxy is asked for must be the target's (not the proxy's).
+func TestTransportThroughConnectProxy(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "via-tunnel") }))
+	defer srv.Close()
+
+	var asked string
+	px := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodConnect {
+			t.Errorf("proxy got %s, want CONNECT", r.Method)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		asked = r.Host
+		up, err := net.Dial("tcp", r.Host)
+		if err != nil {
+			w.WriteHeader(http.StatusBadGateway)
+			return
+		}
+		conn, buf, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			up.Close()
+			return
+		}
+		defer conn.Close()
+		defer up.Close()
+		io.WriteString(conn, "HTTP/1.1 200 Connection Established\r\n\r\n")
+		go func() { io.Copy(up, buf); up.Close() }()
+		io.Copy(conn, up)
+	}))
+	defer px.Close()
+
+	c := &http.Client{Transport: transportFor(true)}
+	req, _ := http.NewRequest("GET", srv.URL, nil)
+	req = req.WithContext(ProxyForConn(req.Context(), px.URL))
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if b, _ := io.ReadAll(resp.Body); string(b) != "via-tunnel" {
+		t.Errorf("body = %q, want via-tunnel", b)
+	}
+	if want := strings.TrimPrefix(srv.URL, "https://"); asked != want {
+		t.Errorf("proxy asked for %q, want the target %q", asked, want)
+	}
+
+	// the spec is derived per dial: a cached one fails the second handshake with "tls: internal error"
+	for i := 0; i < 2; i++ {
+		c.CloseIdleConnections()
+		req, _ := http.NewRequest("GET", srv.URL, nil)
+		req = req.WithContext(ProxyForConn(req.Context(), px.URL))
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatalf("dial %d through the tunnel: %v", i+2, err)
+		}
+		resp.Body.Close()
+	}
+
+	// a socks5 pool cannot carry the fingerprint: it must be refused by name, not dialled
+	c.CloseIdleConnections()
+	req, _ = http.NewRequest("GET", srv.URL, nil)
+	req = req.WithContext(ProxyForConn(req.Context(), "socks5://127.0.0.1:1080"))
+	if _, err := c.Do(req); err == nil || !strings.Contains(err.Error(), "http(s) proxy") {
+		t.Fatalf("socks5 request = %v, want a refusal", err)
 	}
 }

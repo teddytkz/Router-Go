@@ -27,7 +27,8 @@ func init() {
 		Website: "https://opencode.ai", AuthHint: "No key needed", FreeRefresh: "daily",
 		Note:    "Free models from OpenCode Zen, no key. The service only serves OpenCode's own client (its TLS fingerprint, its session header and its tool/env fingerprint), which this provider reproduces; the free tier is also rate-limited per session, so a request may answer 429 at peak times.",
 		BaseURL: defaultBase, ForceStream: true, Passthrough: true,
-		Native: native, Transport: transport,
+		Native: native, Transport: transport, DirectOnly: true,
+		ProxyDialer: true, ProxyRun: ProxyForConn,
 		Models: freeModels,
 	})
 }

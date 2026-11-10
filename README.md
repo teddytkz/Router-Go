@@ -15,7 +15,7 @@ More docs: [`docs/PRD.md`](docs/PRD.md) · [`docs/PORTING_CHECKLIST.md`](docs/PO
 - **Model masking.** A name clients send (`fast`) maps to a real model or combo, so you can swap what is behind it without touching clients.
 - **Custom models.** Register models by hand for upstreams that have no `/models` endpoint. Capabilities (vision, reasoning, audio, context window) can be overridden.
 - **Gateway API keys** with a per-key access list.
-- **Proxy pools.** Route a key's traffic through a proxy (http/https/socks5), or through a relay you deploy to your own Vercel or Cloudflare account.
+- **Proxy pools.** Route a key's traffic through a proxy (http/https/socks5), or through a relay you deploy to your own Vercel or Cloudflare account. Providers that refuse plain relays (`DirectOnly`, today OpenCode Free) fail with a clear error instead of a misleading 429; a plain http proxy pool still works for them (socks5 does not: it cannot carry their TLS fingerprint).
 - **Usage, quota, console log and token saver** in the dashboard.
 
 ## Built-in providers

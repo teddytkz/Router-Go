@@ -69,6 +69,15 @@ type Provider struct {
 	// client's TLS fingerprint. nil = the shared client (proxy pools included); a returned transport still goes
 	// through the pools.
 	Transport func() *http.Transport `json:"-"`
+	// DirectOnly refuses relay pools: the upstream answers a forwarded request with
+	// 429 "Client IP address is required for free usage" whatever headers the relay adds (verified 2026-11-10 on the
+	// live edge for opencode.ai, both a Cloudflare Worker and its sockets API). A plain http proxy is still allowed.
+	DirectOnly bool `json:"-"`
+	// ProxyDialer: the provider's own Transport dials through the proxy itself (CONNECT, then its own TLS), so a
+	// plain proxy pool must hand it the proxy URL instead of wrapping the transport in url.Proxy. ProxyRun is the
+	// function that puts that URL on the context; nil = the provider has no such hook.
+	ProxyDialer bool                                          `json:"-"`
+	ProxyRun    func(context.Context, string) context.Context `json:"-"`
 
 	// Usage reads the connection's live quota from the provider's own usage API (see usage.go); nil = not supported.
 	Usage func(ctx context.Context, d Doer, c UsageCall) (Usage, error) `json:"-"`

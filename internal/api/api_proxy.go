@@ -58,15 +58,24 @@ func maskURL(raw string) string {
 
 type poolInput struct {
 	Name        *string `json:"name"`
+	Type        *string `json:"type"`
 	ProxyURL    *string `json:"proxyUrl"`
 	NoProxy     *string `json:"noProxy"`
 	IsActive    *bool   `json:"isActive"`
 	StrictProxy *bool   `json:"strictProxy"`
+	// RelayKey registers a relay the user deployed themselves; it is write-only and never returned.
+	RelayKey *string `json:"relayKey"`
 }
 
 func (in poolInput) apply(p *db.ProxyPool) {
 	if in.Name != nil {
 		p.Name = *in.Name
+	}
+	if in.Type != nil && *in.Type != "" {
+		p.Type = *in.Type
+	}
+	if in.RelayKey != nil && *in.RelayKey != "" {
+		p.RelayKey = strings.TrimSpace(*in.RelayKey)
 	}
 	// an unchanged masked URL means "keep the stored one" (the edit form only ever sees the masked value)
 	if in.ProxyURL != nil && *in.ProxyURL != maskURL(p.ProxyURL) {
@@ -88,7 +97,7 @@ func (a *API) createProxyPool(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &in) {
 		return
 	}
-	p := &db.ProxyPool{Type: db.PoolHTTP} // relays come from the deploy endpoints
+	p := &db.ProxyPool{Type: db.PoolHTTP} // relays made by the deploy endpoints carry their own type
 	in.apply(p)
 	if err := a.Store.CreateProxyPool(p); err != nil {
 		writeErr(w, 400, err.Error())

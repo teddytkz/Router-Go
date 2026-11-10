@@ -16,6 +16,9 @@ const (
 	PoolHTTP       = "http"
 	PoolVercel     = "vercel"
 	PoolCloudflare = "cloudflare"
+	// PoolPostcard is a relay that preserves the client's TLS identity, so an upstream that gates on it still
+	// accepts the call. Unlike the plain relays it does not re-originate TLS with its own handshake.
+	PoolPostcard = "postcard"
 	// PoolNone in providerSpecificData.proxyPoolId means "no proxy" explicitly.
 	PoolNone = "__none__"
 )
@@ -41,7 +44,14 @@ type InvalidError string
 
 func (e InvalidError) Error() string { return string(e) }
 
-func (p *ProxyPool) IsRelay() bool { return p.Type == PoolVercel || p.Type == PoolCloudflare }
+// IsRelay: the pool is a deployed forwarder (not a proxy). Fingerprint relays count too — they are deployed workers
+// reached over HTTP, they just rebuild the client's TLS themselves.
+func (p *ProxyPool) IsRelay() bool {
+	return p.Type == PoolVercel || p.Type == PoolCloudflare || p.Type == PoolPostcard
+}
+
+// KeepsFingerprint: the relay resumes the client's own TLS, so a provider that refuses plain relays still accepts it.
+func (p *ProxyPool) KeepsFingerprint() bool { return p.Type == PoolPostcard }
 
 type poolData struct {
 	Name         string `json:"name"`
@@ -125,7 +135,7 @@ func (p *ProxyPool) validate() error {
 	case p.Name == "" || len(p.Name) > 80:
 		return InvalidError("name is required (max 80 characters)")
 	case p.Type != PoolHTTP && !p.IsRelay():
-		return InvalidError("type must be http, vercel or cloudflare")
+		return InvalidError("type must be http, vercel, cloudflare or postcard")
 	}
 	u, err := ValidProxyURL(p.ProxyURL, p.IsRelay())
 	p.ProxyURL = u

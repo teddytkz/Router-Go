@@ -2,3 +2,6 @@
 /router-go.exe
 node_modules
 /tmp
+
+# local-only tooling (never committed)
+/.local
