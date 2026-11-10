@@ -1,44 +1,44 @@
 # PRD — Router-Go
 
-Rewrite dari **XRouter-Next** (Next.js, `~/9router/XRouter-Next`) ke **Go**, dengan dashboard React yang di-embed ke binary Go.
-Referensi implementasi Go: <https://github.com/luqman-v1/9router-go> (dipakai sebagai acuan struktur, bukan di-fork).
+Rewrite of **XRouter-Next** (Next.js, `~/9router/XRouter-Next`) in **Go**, with a React dashboard embedded into the Go binary.
+Go implementation reference: <https://github.com/luqman-v1/9router-go> (used as a structural reference, not forked).
 
-Status dokumen: **v1 — 2026-11-09 (fase 1 diimplementasi)**. Checklist porting ada di [`PORTING_CHECKLIST.md`](./PORTING_CHECKLIST.md) dan di-update tiap fitur selesai.
+Document status: **v1 — 2026-11-09 (phase 1 implemented)**. The porting checklist lives in [`PORTING_CHECKLIST.md`](./PORTING_CHECKLIST.md) and is updated each time a feature is finished.
 
 ---
 
-## 1. Latar belakang & tujuan
+## 1. Background & goals
 
-XRouter-Next adalah gateway AI lokal: satu endpoint OpenAI-compatible (`/v1/*`) yang me-route ke 40+ provider, plus dashboard Next.js. Masalahnya: butuh Node/Next runtime, memori besar, dan startup lambat.
+XRouter-Next is a local AI gateway: a single OpenAI-compatible endpoint (`/v1/*`) that routes to 40+ providers, plus a Next.js dashboard. The problem: it needs a Node/Next runtime, uses a lot of memory, and starts slowly.
 
-**Tujuan Router-Go**
-1. Satu binary Go (tanpa Node saat runtime) yang melayani API gateway **dan** dashboard.
-2. Data kompatibel dengan XRouter-Next (skema SQLite sama) supaya bisa migrasi tanpa konversi.
-3. Dashboard baru yang rapi, cepat, dan konsisten (dark/light).
-4. Port bertahap; fase 1 hanya **custom provider OpenAI-compatible**.
+**Router-Go goals**
+1. A single Go binary (no Node at runtime) that serves the API gateway **and** the dashboard.
+2. Data compatible with XRouter-Next (same SQLite schema) so migration needs no conversion.
+3. A new dashboard that is clean, fast, and consistent (dark/light).
+4. Incremental port; phase 1 covers only the **OpenAI-compatible custom provider**.
 
-**Non-goal fase 1**: provider OAuth (Claude, Codex, Kiro, dll.), translator format (Claude/Gemini), combo, tunnel, MITM, CLI tools, media (image/audio/video), SSO (OIDC/SAML), cloud sync, tray/CLI launcher.
+**Phase 1 non-goals**: OAuth providers (Claude, Codex, Kiro, etc.), format translators (Claude/Gemini), combo, tunnel, MITM, CLI tools, media (image/audio/video), SSO (OIDC/SAML), cloud sync, tray/CLI launcher.
 
-## 2. Keputusan teknis
+## 2. Technical decisions
 
-| Aspek | Keputusan | Alasan |
+| Aspect | Decision | Rationale |
 |---|---|---|
-| Backend | Go (lihat go.mod), `net/http` + `chi` v5 | Sama seperti referensi, router ringan |
-| SQLite | `modernc.org/sqlite` (pure Go, tanpa CGO) | Cross-compile Windows/Linux mudah |
-| Skema DB | **Identik** dengan `src/lib/db/schema.js` XRouter-Next (tabel `settings`, `providerConnections`, `providerNodes`, `apiKeys`, `usageHistory`, `kv`, dst.) | Kompatibel data lama |
-| Auth dashboard | bcrypt hash di `settings.password`, JWT HS256 di cookie `auth_token` (24 jam), login limiter per IP | Perilaku sama dengan Next |
-| Frontend | React 19 + TypeScript + Vite + **TanStack Query** + Tailwind v4 + react-router | Sesuai permintaan |
-| Embed | `//go:embed web/dist`, SPA fallback ke `index.html`, aset hashed `immutable` | Satu binary |
-| Lokasi data | `~/.router-go` (Linux/macOS), `%USERPROFILE%\.router-go` (Windows). Override: `ROUTER_GO_DATA_DIR` / `DATA_DIR`. DB: `<data>/db/data.sqlite` | Sesuai permintaan |
-| Port | Default `20128` (sama dengan XRouter-Next). Prioritas: `--port` > env `PORT`/`ROUTER_GO_ADDR` > `settings.port` > default. Ubah dari Settings memindahkan listener langsung (port baru di-bind dulu; port terpakai → 409, listener lama ditutup setelah 1 dtk) | Klien lama tetap jalan |
+| Backend | Go (see go.mod), `net/http` + `chi` v5 | Same as the reference, lightweight router |
+| SQLite | `modernc.org/sqlite` (pure Go, no CGO) | Easy Windows/Linux cross-compilation |
+| DB schema | **Identical** to `src/lib/db/schema.js` of XRouter-Next (tables `settings`, `providerConnections`, `providerNodes`, `apiKeys`, `usageHistory`, `kv`, etc.) | Compatible with existing data |
+| Dashboard auth | bcrypt hash in `settings.password`, JWT HS256 in the `auth_token` cookie (24 hours), per-IP login limiter | Same behavior as Next |
+| Frontend | React 19 + TypeScript + Vite + **TanStack Query** + Tailwind v4 + react-router | As requested |
+| Embed | `//go:embed web/dist`, SPA fallback to `index.html`, hashed assets `immutable` | Single binary |
+| Data location | `~/.router-go` (Linux/macOS), `%USERPROFILE%\.router-go` (Windows). Override: `ROUTER_GO_DATA_DIR` / `DATA_DIR`. DB: `<data>/db/data.sqlite` | As requested |
+| Port | Default `20128` (same as XRouter-Next). Priority: `--port` > env `PORT`/`ROUTER_GO_ADDR` > `settings.port` > default. Changing it from Settings moves the listener live (the new port is bound first; port in use → 409, the old listener is closed after 1 s) | Existing clients keep working |
 
-### Struktur repo
+### Repo structure
 
 ```
 Router-Go/
 ├── cmd/router-go/main.go        # entrypoint
 ├── internal/
-│   ├── provider/                # provider bawaan: provider.go (tipe + registry), builtin/ (impor semua), <nama>/ satu paket per provider
+│   ├── provider/                # built-in providers: provider.go (types + registry), builtin/ (imports all), <name>/ one package per provider
 │   ├── config/                  # env, data dir, JWT secret
 │   ├── db/                      # open sqlite, schema bootstrap, repos (settings, nodes, connections, keys, usage)
 │   ├── auth/                    # bcrypt, JWT cookie, login limiter, API key gen/validate
@@ -49,172 +49,172 @@ Router-Go/
 └── Makefile
 ```
 
-## 3. Fase 1 — Custom Provider OpenAI-compatible
+## 3. Phase 1 — OpenAI-compatible Custom Provider
 
 ### 3.1 User story
-- Sebagai operator, saya login ke dashboard (password default `123456`, bisa diganti).
-- Saya menambah **provider node** OpenAI-compatible: nama, prefix, base URL, tipe API (`chat` / `responses`).
-- Saya menambah satu atau lebih **API key upstream** (key pool) ke node itu, mengetes koneksinya, dan melihat daftar model upstream (`GET {baseUrl}/models`).
-- Saya membuat **API key gateway** untuk klien (`sk-{machineId}-{keyId}-{crc8}`).
-- Klien memanggil `POST /v1/chat/completions` dengan `model: "<prefix>/<model>"`; gateway meneruskan (stream maupun non-stream) ke upstream, memutar key bila gagal.
-- Saya melihat penggunaan (request, token, latensi, status) di halaman Usage.
+- As an operator, I log in to the dashboard (default password `123456`, changeable).
+- I add an OpenAI-compatible **provider node**: name, prefix, base URL, API type (`chat` / `responses`).
+- I add one or more **upstream API keys** (key pool) to that node, test its connection, and view the upstream model list (`GET {baseUrl}/models`).
+- I create a **gateway API key** for clients (`sk-{machineId}-{keyId}-{crc8}`).
+- A client calls `POST /v1/chat/completions` with `model: "<prefix>/<model>"`; the gateway forwards it (streaming or non-streaming) to the upstream, rotating keys on failure.
+- I view usage (requests, tokens, latency, status) on the Usage page.
 
-### 3.2 Fungsional
+### 3.2 Functional
 
 **Gateway (`/v1`)**
-- `POST /v1/chat/completions` — passthrough ke `{baseUrl}/chat/completions`; SSE di-stream apa adanya (flush per chunk, cancel saat klien putus).
-- `POST /v1/responses` — passthrough ke `{baseUrl}/responses` untuk node `apiType=responses`.
-- `POST /v1/embeddings` — passthrough ke `{baseUrl}/embeddings`.
-- `GET /v1/models` — model tiap node (`prefix/model`) dari `GET {baseUrl}/models` upstream (cache 5 menit). `customModels` (kv) ditunda ke fase 2.
-- Resolusi model: `prefix/model` → node dengan `prefix` tsb; alias model (`kv.modelAliases`) didukung baca-saja.
-- Pasangan format yang tidak cocok (mis. klien `/chat/completions` ke node `responses`) → `400` dengan pesan jelas (translator = fase 2).
-- Auth klien: `Authorization: Bearer <key>` atau `x-api-key`; wajib bila `settings.requireApiKey != false`.
-- **Account fallback**: pilih koneksi aktif berurutan `priority`; skip yang `rateLimitedUntil` belum lewat; pada 401/402/403/404/429/5xx tandai cooldown (429/rate-limit = exponential backoff 2s→5m; 401/402/403/404 = 2 menit; error transient/5xx = 30 detik; pola akun suspended = 24 jam; konstanta identik XRouter-Next) lalu coba koneksi berikut. Error request-scoped (4xx lain) langsung dikembalikan. Sukses → reset status.
-- Pencatatan usage ke `usageHistory` (provider, model, connectionId, apiKey, endpoint, token, latensi, status).
-- Header rahasia (`Authorization` klien) tidak pernah diteruskan ke upstream; upstream hanya dapat key koneksi.
-- SSRF: base URL node divalidasi (skema http/https). Private/loopback **diizinkan** (self-hosted, mis. Ollama) karena hanya admin berlogin yang bisa menambah node.
+- `POST /v1/chat/completions` — passthrough to `{baseUrl}/chat/completions`; SSE is streamed as-is (flush per chunk, cancel when the client disconnects).
+- `POST /v1/responses` — passthrough to `{baseUrl}/responses` for nodes with `apiType=responses`.
+- `POST /v1/embeddings` — passthrough to `{baseUrl}/embeddings`.
+- `GET /v1/models` — each node's models (`prefix/model`) from the upstream `GET {baseUrl}/models` (5-minute cache). `customModels` (kv) is deferred to phase 2.
+- Model resolution: `prefix/model` → the node with that `prefix`; model aliases (`kv.modelAliases`) are supported read-only.
+- Mismatched format pairs (e.g. a `/chat/completions` client to a `responses` node) → `400` with a clear message (translator = phase 2).
+- Client auth: `Authorization: Bearer <key>` or `x-api-key`; required when `settings.requireApiKey != false`.
+- **Account fallback**: pick active connections in `priority` order; skip those whose `rateLimitedUntil` has not yet passed; on 401/402/403/404/429/5xx mark a cooldown (429/rate-limit = exponential backoff 2s→5m; 401/402/403/404 = 2 minutes; transient error/5xx = 30 seconds; suspended-account pattern = 24 hours; constants identical to XRouter-Next) then try the next connection. Request-scoped errors (other 4xx) are returned immediately. Success → reset status.
+- Usage is recorded to `usageHistory` (provider, model, connectionId, apiKey, endpoint, tokens, latency, status).
+- Secret headers (the client's `Authorization`) are never forwarded upstream; the upstream only gets the connection's key.
+- SSRF: the node base URL is validated (http/https scheme). Private/loopback is **allowed** (self-hosted, e.g. Ollama) because only a logged-in admin can add nodes.
 
-**Dashboard API (`/api`)** — path sama dengan XRouter-Next bila ada:
+**Dashboard API (`/api`)** — same paths as XRouter-Next where they exist:
 `auth/{login,logout,status}`, `keys[/{id}]`, `provider-nodes[/{id}]`, `provider-nodes/validate`, `providers[/{id}]`, `providers/{id}/test`, `providers/{id}/models`, `settings`, `usage/stats`, `usage/history`, `health`, `version`.
 
 **Dashboard UI (React)**
-| Halaman | Isi |
+| Page | Contents |
 |---|---|
-| Login | Form password, pesan lockout |
-| Dashboard | Pemilih rentang (24h/7d/30d); kartu total request, total input, total output, total cache; grafik request & token (input/output/cache) per jam/hari; grafik model paling sering dipakai |
-| Providers | Daftar node + status, tambah/edit/hapus node, kelola key pool per node, tes koneksi, lihat model |
-| API Keys | Base URL gateway, daftar & buat API key gateway (+ access list), contoh `curl`/SDK |
-| Usage | Tabel riwayat request (filter provider/model/status), total token |
-| Settings | Ganti password, toggle `requireLogin` / `requireApiKey`, info data dir & versi |
+| Login | Password form, lockout message |
+| Dashboard | Range picker (24h/7d/30d); cards for total requests, total input, total output, total cache; request & token (input/output/cache) charts per hour/day; most-used models chart |
+| Providers | Node list + status, add/edit/delete node, manage the key pool per node, connection test, view models |
+| API Keys | Gateway base URL, list & create gateway API keys (+ access list), `curl`/SDK examples |
+| Usage | Request history table (filter by provider/model/status), total tokens |
+| Settings | Change password, toggle `requireLogin` / `requireApiKey`, data dir & version info |
 
-Desain: sidebar kolaps, tema dark/light mengikuti OS + toggle, palet netral dengan satu aksen, tipografi Inter + JetBrains Mono, skeleton loading, toast, empty state, responsif (mobile drawer), keyboard-accessible.
+Design: collapsible sidebar, dark/light theme following the OS + toggle, neutral palette with a single accent, Inter + JetBrains Mono typography, skeleton loading, toast, empty state, responsive (mobile drawer), keyboard-accessible.
 
-### 3.3 Non-fungsional
-- Startup < 300 ms, memori idle < 60 MB.
-- Streaming tanpa buffering penuh; tidak ada goroutine bocor saat klien putus.
+### 3.3 Non-functional
+- Startup < 300 ms, idle memory < 60 MB.
+- Streaming without full buffering; no leaked goroutines when the client disconnects.
 - SQLite WAL, `busy_timeout=5000`, `foreign_keys=ON`.
-- Secret: `JWT_SECRET` env atau file `<data>/jwt-secret` (0600). Cookie `HttpOnly`, `SameSite=Lax`, `Secure` bila `X-Forwarded-Proto=https` atau `AUTH_COOKIE_SECURE=true`.
-- Login limiter: 5 gagal → lock bertahap per IP; IP diambil dari koneksi TCP (header `X-Forwarded-For` hanya dipercaya dari loopback).
-- `apiKey` upstream tidak pernah dikirim balik utuh ke UI (masked).
-- Default password `123456` hanya boleh dipakai dari localhost; dari remote, login ditolak sampai password diganti / `INITIAL_PASSWORD` kuat di-set (meniru perilaku Next).
+- Secret: `JWT_SECRET` env or the file `<data>/jwt-secret` (0600). Cookie `HttpOnly`, `SameSite=Lax`, `Secure` when `X-Forwarded-Proto=https` or `AUTH_COOKIE_SECURE=true`.
+- Login limiter: 5 failures → progressive lock per IP; the IP is taken from the TCP connection (the `X-Forwarded-For` header is trusted only from loopback).
+- The upstream `apiKey` is never sent back to the UI in full (masked).
+- The default password `123456` may only be used from localhost; from remote, login is rejected until the password is changed / a strong `INITIAL_PASSWORD` is set (mimicking Next's behavior).
 
-### 3.4 Model data (kompatibel)
+### 3.4 Data model (compatible)
 
 - `providerNodes(id, type, name, data{prefix,apiType,baseUrl}, createdAt, updatedAt)` — `id = "openai-compatible-{apiType}-{uuid}"`, `type="openai-compatible"`.
 - `providerConnections(id, provider=<node id>, authType="apikey", name, priority, isActive, data{apiKey, providerSpecificData{prefix,apiType,baseUrl,nodeName}, testStatus, lastError, lastErrorAt, errorCode, rateLimitedUntil, backoffLevel,…})`.
 - `apiKeys(id, key, name, machineId, isActive, createdAt, accessRestricted, accessAllow)`.
-- `settings(id=1, data JSON)` — `password`, `requireLogin`, `requireApiKey`, dst.
+- `settings(id=1, data JSON)` — `password`, `requireLogin`, `requireApiKey`, etc.
 - `usageHistory`, `kv`.
-- Tabel lain dari skema XRouter-Next dibuat kosong agar DB bisa dibuka balik oleh Next.
+- Other tables from the XRouter-Next schema are created empty so the DB can be opened back by Next.
 
-### 3.5 Kriteria selesai (acceptance)
-1. `make build` menghasilkan satu binary; `./router-go` membuka dashboard di `:20128`.
-2. Login → tambah node `https://api.openai.com/v1` (atau mock lokal) → tambah key → tes sukses.
-3. `curl /v1/chat/completions` stream & non-stream melalui `prefix/model` berhasil; dengan 2 key dan key pertama 429, request jatuh ke key kedua.
-4. Usage muncul di dashboard.
-5. DB yang dibuat Router-Go bisa dibaca XRouter-Next dan sebaliknya (tabel/kolom sama) untuk 5 tabel fase 1.
-6. `go vet`, `go test ./...`, `tsc --noEmit` hijau; ada test untuk fallback, auth, resolve model, streaming passthrough.
+### 3.5 Acceptance criteria
+1. `make build` produces a single binary; `./router-go` opens the dashboard on `:20128`.
+2. Login → add node `https://api.openai.com/v1` (or a local mock) → add key → test succeeds.
+3. `curl /v1/chat/completions` stream & non-stream via `prefix/model` succeeds; with 2 keys and the first key returning 429, the request falls through to the second key.
+4. Usage appears in the dashboard.
+5. A DB created by Router-Go can be read by XRouter-Next and vice versa (same tables/columns) for the 5 phase 1 tables.
+6. `go vet`, `go test ./...`, `tsc --noEmit` are green; there are tests for fallback, auth, model resolve, streaming passthrough.
 
-## 3b. Fase 2a — Translator, combo, anthropic-compatible, custom models, key access
+## 3b. Phase 2a — Translator, combo, anthropic-compatible, custom models, key access
 
-Lanjutan fase 1 (diminta langsung setelah fase 1). Spesifikasi di sini jadi kontrak backend ↔ frontend.
+Continuation of phase 1 (requested right after phase 1). The specification here serves as the backend ↔ frontend contract.
 
 ### Format & translator
-- Tiga format klien/upstream: `chat` (`/v1/chat/completions`), `responses` (`/v1/responses`), `messages` (Anthropic `/v1/messages`, **endpoint baru**).
-- Format upstream sebuah node: openai-compatible `apiType` = `chat` | `responses`; anthropic-compatible = `messages`.
-- Jika format klien ≠ format upstream, gateway menerjemahkan lewat hub `chat`: request `klien→chat→upstream`, response `upstream→chat→klien`, termasuk streaming SSE (event per event, tanpa buffering penuh), tool calls, system prompt, gambar base64, usage. Paket: `internal/translate`.
-- Error ke klien memakai bentuk error format klien (OpenAI `{error:{message,type,code}}`, Anthropic `{type:"error",error:{type,message}}`).
+- Three client/upstream formats: `chat` (`/v1/chat/completions`), `responses` (`/v1/responses`), `messages` (Anthropic `/v1/messages`, **new endpoint**).
+- A node's upstream format: openai-compatible `apiType` = `chat` | `responses`; anthropic-compatible = `messages`.
+- If the client format ≠ the upstream format, the gateway translates through the `chat` hub: request `client→chat→upstream`, response `upstream→chat→client`, including SSE streaming (event by event, without full buffering), tool calls, system prompt, base64 images, usage. Package: `internal/translate`.
+- Errors to the client use the client format's error shape (OpenAI `{error:{message,type,code}}`, Anthropic `{type:"error",error:{type,message}}`).
 
-### Node anthropic-compatible
-- `providerNodes.type="anthropic-compatible"`, id `anthropic-compatible-{uuid}`, `data{prefix, baseUrl}` (tanpa `apiType`).
+### Anthropic-compatible node
+- `providerNodes.type="anthropic-compatible"`, id `anthropic-compatible-{uuid}`, `data{prefix, baseUrl}` (without `apiType`).
 - Upstream: `POST {baseUrl}/messages`, header `x-api-key` + `anthropic-version: 2023-06-01`; model list `GET {baseUrl}/models`.
-- Key pool, fallback, cooldown identik dengan node openai-compatible. `POST /api/provider-nodes` menerima `type` (`openai-compatible` default | `anthropic-compatible`).
+- Key pool, fallback, cooldown identical to the openai-compatible node. `POST /api/provider-nodes` accepts `type` (`openai-compatible` default | `anthropic-compatible`).
 
 ### Combo
-- Tabel `combos` (sudah ada). Combo = nama (tanpa `/`) + daftar model (`prefix/model` atau alias) berurutan. Klien memakai `model: "<nama combo>"`.
-- Strategi: `fallback` (urut; lanjut ke anggota berikut bila anggota gagal/cooling/menolak request) dan `round-robin` (rotasi titik awal tiap request; sticky limit = `settings.comboStickyRoundRobinLimit`, default 1). Strategi per-combo disimpan di `settings.comboStrategies[name].fallbackStrategy`, default `settings.comboStrategy` (`fallback`), kompatibel XRouter-Next.
-- Error request-scoped (4xx lain) dari satu anggota → lanjut ke anggota berikutnya tanpa cooldown; bila semua gagal, kembalikan respons anggota request-scoped pertama; selain itu 503 ringkasan + `Retry-After` bila ada cooldown.
-- API: `GET /api/combos` → `{combos:[{id,name,kind,models[],strategy,context_length,createdAt,updatedAt}]}`; `POST /api/combos {name,models[],strategy?,context_length?}`; `PUT /api/combos/{id}` (field sama, parsial); `DELETE /api/combos/{id}`. Nama unik (409), `^[A-Za-z0-9_.-]{1,64}$`, models ≥1 string.
-- `GET /v1/models` ikut menampilkan combo (`owned_by:"combo"`).
+- Table `combos` (already exists). Combo = a name (without `/`) + an ordered list of models (`prefix/model` or alias). Clients use `model: "<combo name>"`.
+- Strategies: `fallback` (in order; continue to the next member if a member fails/is cooling/rejects the request) and `round-robin` (rotates the starting point on each request; sticky limit = `settings.comboStickyRoundRobinLimit`, default 1). The per-combo strategy is stored in `settings.comboStrategies[name].fallbackStrategy`, defaulting to `settings.comboStrategy` (`fallback`), compatible with XRouter-Next.
+- A request-scoped error (other 4xx) from one member → continue to the next member without a cooldown; if all fail, return the first request-scoped member's response; otherwise a summary 503 + `Retry-After` if there is a cooldown.
+- API: `GET /api/combos` → `{combos:[{id,name,kind,models[],strategy,context_length,createdAt,updatedAt}]}`; `POST /api/combos {name,models[],strategy?,context_length?}`; `PUT /api/combos/{id}` (same fields, partial); `DELETE /api/combos/{id}`. Unique name (409), `^[A-Za-z0-9_.-]{1,64}$`, models ≥1 string.
+- `GET /v1/models` also lists combos (`owned_by:"combo"`).
 
 ### Model alias & custom model
-- `kv(scope='modelAliases')` key=alias value=`prefix/model`; `kv(scope='customModels')` key=`{prefix}|{id}|llm` value=`{providerAlias,id,type:"llm",name}` (format XRouter-Next).
+- `kv(scope='modelAliases')` key=alias value=`prefix/model`; `kv(scope='customModels')` key=`{prefix}|{id}|llm` value=`{providerAlias,id,type:"llm",name}` (XRouter-Next format).
 - API: `GET /api/models/alias` → `{aliases:{alias:model}}`; `PUT /api/models/alias {alias,model}`; `DELETE /api/models/alias?alias=`. `GET /api/models/custom` → `{models:[{providerAlias,id,type,name}]}`; `POST /api/models/custom {providerAlias,id,name?}`; `DELETE /api/models/custom?providerAlias=&id=`.
-- Custom model dipakai untuk upstream yang tidak mengekspos `/models`; muncul di `/v1/models` dan daftar model dashboard (digabung, tanpa duplikat).
+- Custom models are used for upstreams that do not expose `/models`; they appear in `/v1/models` and the dashboard model list (merged, without duplicates).
 
 ### Per-key access list
-- Kolom `apiKeys.accessRestricted` / `accessAllow` (JSON array). Default tak terbatas. Key *restricted* hanya boleh memanggil combo/model di allow list (cocok persis, case-insensitive, pada identitas **ter-resolve** `nodeId/model`; alias dan prefix sama dianggap satu target; combo yang diizinkan memberi anggotanya hanya bila lewat combo itu).
-- Fail-closed: allow list rusak → tidak boleh apa pun. Ditolak = `403` `This API key is not allowed to use model "<requested>"` sebelum kredensial upstream disentuh. `/v1/models` disaring sesuai allow list.
-- API: item key di `GET/POST /api/keys` memuat `access:{restricted,allow[]}`; `POST /api/keys` boleh menerima `access`; `PATCH /api/keys/{id}` menerima `access` (validasi: objek `{restricted:bool,allow:string[]}`, ≤200 entri, ≤256 karakter/entri; invalid → 400).
+- Columns `apiKeys.accessRestricted` / `accessAllow` (JSON array). Unrestricted by default. A *restricted* key may only call the combos/models in the allow list (exact match, case-insensitive, on the **resolved** identity `nodeId/model`; an alias and a prefix that resolve the same are treated as one target; an allowed combo grants its members only when reached through that combo).
+- Fail-closed: a corrupt allow list → nothing is allowed. Rejection = `403` `This API key is not allowed to use model "<requested>"` before any upstream credentials are touched. `/v1/models` is filtered according to the allow list.
+- API: key items in `GET/POST /api/keys` include `access:{restricted,allow[]}`; `POST /api/keys` may accept `access`; `PATCH /api/keys/{id}` accepts `access` (validation: object `{restricted:bool,allow:string[]}`, ≤200 entries, ≤256 characters/entry; invalid → 400).
 
-### Di luar fase 2a (tetap fase 2b+)
-pricing, Gemini `/v1beta`, `/v1/messages/count_tokens`, round-robin antar *koneksi* (account semaphore), capability auto-switch, smart/fusion combo, Dockerfile.
+### Outside phase 2a (still phase 2b+)
+pricing, Gemini `/v1beta`, `/v1/messages/count_tokens`, round-robin across *connections* (account semaphore), capability auto-switch, smart/fusion combo, Dockerfile.
 
-## 3c. Fase 2c — Token Saver, Guards & Shields, halaman Usage
+## 3c. Phase 2c — Token Saver, Guards & Shields, Usage page
 
-- **Ponytail** (`settings.ponytailEnabled`, `ponytailLevel` lite|full|ultra) dan **Watermarks Remover** (`watermarksRemoverEnabled`): menyuntik instruksi ke system prompt body upstream (setelah translasi; teks prompt sama dengan XRouter-Next). Idempoten; tidak mengubah body klien yang dipakai anggota combo lain. Watermarks Remover hanya lewat prompt, tidak menyaring respons. **Custom system prompt** (`customPromptEnabled`, `customPrompt` ≤8000 karakter). Urutan: ponytail → watermarks → custom → loop guard. Token saver lain (RTK, caveman, headroom, pxpipe) tidak di-port.
-- **Loop Guard** (`loopGuardEnabled`, default aktif): mendeteksi tool call identik ≥3×, urutan tool call berulang ≥2×, atau teks asisten/kalimat berulang ≥3× pada riwayat request; lalu menyuntik termination prompt dan `[ROUTER NOTE: …]` di pesan terakhir.
-- **Circuit Breaker** (`circuitBreakerEnabled`, default aktif): per node; 5 kegagalan sisi provider (408/500/502/503/504/520/524 atau error jaringan) dalam 60 dtk → open; request gagal cepat (503 + `Retry-After`) sehingga combo lanjut ke anggota berikut; setelah 30 dtk satu probe (half-open), gagal → open lagi dengan tunggu ×2 tiap 3 probe gagal (maks ×16). Beda dari asli: kegagalan dihitung dalam jendela geser dan dihapus oleh sukses.
-- **Semaphore** (`semaphoreEnabled`, default aktif): maks 3 request paralel per koneksi (`providerSpecificData.maxConcurrency`, 0 = tanpa batas), antrian FIFO ≤20, tunggu ≤30 dtk; koneksi yang masih punya slot dipilih lebih dulu.
-- API: `PATCH /api/settings` menerima kunci di atas (validasi level/panjang). UI: halaman **Token Saver**.
-- **Kapabilitas model** (`kv customModels[].caps`): vision, reasoning, audioInput, contextWindow. Terdeteksi dari id model (`internal/modelcaps`: pola keluarga model, ukuran pada nama seperti `-32k`/`-1m`, tabel jendela konteks) dan dapat di-override per model (`PATCH /api/models/custom`); override selalu menang, deteksi hanya menyalakan. Konteks tidak dikenal (0) tidak pernah menyingkirkan model.
-- **Routing sadar kapabilitas**: dari request dibaca kebutuhan: gambar/audio pada giliran user saat ini = wajib (hard), parameter reasoning/thinking = pilihan (soft), estimasi token (≈4 karakter/token, 1000 per gambar/berkas, + `max_tokens`) terhadap jendela konteks. Anggota combo diurutkan stabil: memenuhi semua → memenuhi yang wajib → sisanya; yang tak muat konteks atau tak punya kapabilitas wajib ke belakang (tidak dibuang, fallback tetap jalan).
-- **Capacity Adapter** (`settings.capacityAdapter.{vision,audioInput} = {enabled, roundRobin, models[]}`): bila tak ada kandidat yang memenuhi kapabilitas wajib, pool adapter disisipkan di depan (model asli tetap sebagai fallback); key restricted hanya diarahkan ke model adapter yang diizinkan. Tidak ada pemangkasan riwayat untuk jendela konteks adapter (belum).
-- **Provider bawaan** (`internal/provider/<nama>`): cline, codebuddy, qoder, freebuff, opencode-free, kiro (lihat "Kiro" di bawah). Tiap paket mendaftar lewat `provider.Register` di `init()`; `provider/builtin` mengimpor semuanya. Provider bawaan diperlakukan seperti node (prefix = alias, mis. `cl/<model>`; key pool = koneksi dengan `provider = <id registry>`), sehingga fallback, combo, translasi, usage, dan access list langsung berlaku. Katalog model registry langsung bisa dipakai (aturan "harus di-add" hanya untuk provider custom). Quirk per provider: stream paksa + perakitan respons non-stream, amplop `{success,data}`, format per model (responses/messages), header statis. Alias terpakai tidak bisa dipakai node custom. `GET /api/builtin-providers` mendaftar registry. Auth: API key/token, dan login OAuth browser untuk provider yang mendukungnya. Penyamaran identitas klien resmi (UA/versi CLI, fingerprint TLS) **sengaja tidak** di-port, jadi CodeBuddy dan OpenCode Free bisa ditolak upstream; Qoder (protokol bertanda tangan sendiri) terdaftar tetapi belum bisa dirute. Freebuff menyimpang dari pola itu: protokolnya sendiri menolak klien non-resmi sambil mencatat strike per akun, jadi port ini tidak bicara ke backend-nya sama sekali melainkan menjalankan biner resmi freebuff di sesi tmux pribadi dan membaca jawaban dari log chat milik CLI itu sendiri (hook `Native.Local`, tanpa koneksi/API key di router).
-- **Login OAuth** (`POST /api/oauth/{provider}/start|exchange|poll`): alurnya berbeda per provider dan ditulis di paketnya (`internal/provider/<nama>/oauth.go`). `code` (Cline): login URL → browser kembali ke `/oauth/callback?code=…` (token ada di dalam kode, base64) → `exchange`. `poll` (CodeBuddy: state + `authUrl`): dashboard memanggil `poll` sampai token tiba. Freebuff tidak punya alur sign-in di router: CLI-nya memegang login sendiri, dan route OAuth-nya menjawab 400 `this provider has no browser sign-in`. Token disimpan di koneksi `authType=oauth` (tidak pernah dikirim ke UI), di-refresh otomatis 2 menit sebelum kedaluwarsa (satu refresh per koneksi), dan dikirim sebagai key (Cline: awalan `workos:`). Login ulang akun yang sama memperbarui koneksi yang ada; login pertama mengaktifkan katalog model. Header dinamis per request (id request CodeBuddy) dan header default registry (Cline, CodeBuddy: data XRouter) dikirim juga pada panggilan login; semuanya bisa dilihat dan diubah di kartu Custom Headers.
-- **Pengaturan provider bawaan**: model katalog harus di-enable dulu (kv `customModels`, sama dengan provider custom; kunci pertama otomatis mengaktifkan seluruh katalog; `POST /api/builtin-providers/{id}/models {enable-all|disable-all}`). **Custom headers** per provider (`PUT/DELETE /api/builtin-providers/{id}/headers`, kv `providerHeaders`): override di atas header default registry; `Authorization`/`x-api-key`/`Host`/dll ditolak (kredensial milik API key). **Key pool** per provider (`PUT /api/provider-config/{id}`, kv `providerConfig`): `roundRobin` + `sticky` memutar key awal tiap request.
-- **Model Budgeting** (`/dashboard/model-budgeting`, di bawah Model Masking) dan **Quota Tracker** (`/dashboard/quota-tracker`; `/dashboard/quota` mengalihkan ke sana). Quota Tracker menampilkan kuota live per koneksi; Model Budgeting memuat batas buatan sendiri di bawah ini: pelacak pemakaian per provider dan per koneksi (hari ini / 7 hari / bulan ini, terakhir dipakai) dari `GET /api/quota` (`connections`, `usage`, `limits`); batas bersifat lapisan opsional yang bisa dipasang langsung pada provider atau key. Batas disimpan di kv `quotaLimits`: batas `requests` atau `tokens` per `provider` atau `connection`, jendela `hour|day|week|month`, `calendar` (batas waktu lokal server; minggu mulai Senin) atau `rolling`. Pemakaian dihitung dari `usageHistory` (cancelled tidak dihitung). Dengan `enforce`, gateway melewati target yang kuotanya habis (key berikutnya / anggota combo menggantikan; semua habis → 429 + `Retry-After`); tanpa `enforce` hanya pelacakan. `GET/POST /api/quota`, `PUT/DELETE /api/quota/{id}`.
-- **Model harus di-add dulu**: sebuah model hanya bisa dipakai klien setelah ditambahkan ke provider-nya (`kv customModels`, via Providers → Models). Daftar `/models` upstream hanya katalog untuk dipilih; model yang belum di-add ditolak `404 model_not_added` (alias dan combo mengikuti aturan yang sama; key *restricted* mendapat 403 tanpa membocorkan nama). `/v1/models` hanya menampilkan model yang sudah di-add. `GET /api/provider-nodes/{id}/models` → `{models (added), upstream, error?}`.
-- **Console log** (`/dashboard/console-log`): buffer 1000 baris di memori (`internal/consolelog`); `GET /api/console-logs/stream` (SSE: `init`, `lines`, `clear`), `GET`/`DELETE /api/console-logs`. Gateway mencatat satu baris per request, kegagalan upstream/cooldown, fallback combo, circuit breaker, loop guard, antrian semaphore, dan tes model.
-- **Dashboard CPU/RAM**: `GET /api/system` hanya untuk proses Router-Go (CPU % dari kapasitas mesin, RSS, Go heap, goroutine; riwayat 2 menit).
-- **Usage**: `GET /api/usage/summary?period=month|today|24h|7d|30d|60d|all` (total, seri per jam/hari, breakdown per model/provider/akun/API key/endpoint, live 5 menit, recent) dan `POST /api/usage/reset`. Token cache dicatat di kolom `tokens` (`cached_tokens`).
+- **Ponytail** (`settings.ponytailEnabled`, `ponytailLevel` lite|full|ultra) and **Watermarks Remover** (`watermarksRemoverEnabled`): inject instructions into the upstream body's system prompt (after translation; the prompt text is the same as XRouter-Next). Idempotent; does not alter the client body used by other combo members. Watermarks Remover works only through the prompt and does not filter responses. **Custom system prompt** (`customPromptEnabled`, `customPrompt` ≤8000 characters). Order: ponytail → watermarks → custom → loop guard. Other token savers (RTK, caveman, headroom, pxpipe) are not ported.
+- **Loop Guard** (`loopGuardEnabled`, enabled by default): detects an identical tool call ≥3×, a repeated tool-call sequence ≥2×, or repeated assistant text/sentences ≥3× in the request history; then injects a termination prompt and `[ROUTER NOTE: …]` in the last message.
+- **Circuit Breaker** (`circuitBreakerEnabled`, enabled by default): per node; 5 provider-side failures (408/500/502/503/504/520/524 or network error) within 60 s → open; requests fail fast (503 + `Retry-After`) so the combo moves on to the next member; after 30 s a single probe (half-open), failure → open again with the wait ×2 for every 3 failed probes (max ×16). Differs from the original: failures are counted in a sliding window and cleared by a success.
+- **Semaphore** (`semaphoreEnabled`, enabled by default): max 3 parallel requests per connection (`providerSpecificData.maxConcurrency`, 0 = unlimited), FIFO queue ≤20, wait ≤30 s; a connection that still has a free slot is chosen first.
+- API: `PATCH /api/settings` accepts the keys above (level/length validation). UI: **Token Saver** page.
+- **Model capabilities** (`kv customModels[].caps`): vision, reasoning, audioInput, contextWindow. Detected from the model id (`internal/modelcaps`: model-family patterns, sizes in the name such as `-32k`/`-1m`, a context-window table) and can be overridden per model (`PATCH /api/models/custom`); an override always wins, detection only turns things on. An unknown context (0) never filters a model out.
+- **Capability-aware routing**: needs are read from the request: image/audio in the current user turn = required (hard), reasoning/thinking parameter = optional (soft), token estimate (≈4 characters/token, 1000 per image/file, + `max_tokens`) against the context window. Combo members are stably sorted: satisfies everything → satisfies the required ones → the rest; those that do not fit the context or lack a required capability go to the back (not dropped, so fallback still works).
+- **Capacity Adapter** (`settings.capacityAdapter.{vision,audioInput} = {enabled, roundRobin, models[]}`): when no candidate satisfies the required capability, the adapter pool is inserted at the front (the original model stays as a fallback); a restricted key is routed only to the adapter models it is allowed. No history trimming for the adapter's context window (not yet).
+- **Built-in providers** (`internal/provider/<name>`): cline, codebuddy, qoder, freebuff, opencode-free, kiro (see "Kiro" below). Each package registers through `provider.Register` in `init()`; `provider/builtin` imports them all. Built-in providers are treated like nodes (prefix = alias, e.g. `cl/<model>`; key pool = connections with `provider = <registry id>`), so fallback, combo, translation, usage, and access list apply immediately. The registry's model catalog can be used right away (the "must be added" rule applies only to custom providers). Per-provider quirks: forced stream + assembly of the non-stream response, `{success,data}` envelope, per-model format (responses/messages), static headers. A used alias cannot be used by a custom node. `GET /api/builtin-providers` lists the registry. Auth: API key/token, and browser OAuth login for providers that support it. Impersonation of the official client's identity (UA/CLI version, TLS fingerprint) is **deliberately not** ported, so CodeBuddy and OpenCode Free may be rejected upstream; Qoder (its own signed protocol) is registered but cannot be routed yet. Freebuff deviates from that pattern: its protocol itself rejects non-official clients while recording a strike per account, so this port does not talk to its backend at all and instead runs the official freebuff binary in a private tmux session and reads the answer from the CLI's own chat log (`Native.Local` hook, no connection/API key in the router).
+- **OAuth login** (`POST /api/oauth/{provider}/start|exchange|poll`): the flow differs per provider and is written in its package (`internal/provider/<name>/oauth.go`). `code` (Cline): login URL → browser returns to `/oauth/callback?code=…` (the token is inside the code, base64) → `exchange`. `poll` (CodeBuddy: state + `authUrl`): the dashboard calls `poll` until the token arrives. Freebuff has no sign-in flow in the router: its CLI holds its own login, and its OAuth route answers 400 `this provider has no browser sign-in`. The token is stored in the `authType=oauth` connection (never sent to the UI), refreshed automatically 2 minutes before expiry (one refresh per connection), and sent as the key (Cline: `workos:` prefix). Logging in again to the same account updates the existing connection; the first login enables the model catalog. Per-request dynamic headers (CodeBuddy's request id) and the registry's default headers (Cline, CodeBuddy: XRouter data) are also sent on login calls; all of them can be viewed and changed in the Custom Headers card.
+- **Built-in provider settings**: catalog models must be enabled first (kv `customModels`, same as custom providers; the first key automatically enables the whole catalog; `POST /api/builtin-providers/{id}/models {enable-all|disable-all}`). Per-provider **custom headers** (`PUT/DELETE /api/builtin-providers/{id}/headers`, kv `providerHeaders`): override on top of the registry's default headers; `Authorization`/`x-api-key`/`Host`/etc. are rejected (credentials belong to the API key). Per-provider **key pool** (`PUT /api/provider-config/{id}`, kv `providerConfig`): `roundRobin` + `sticky` rotate the starting key on every request.
+- **Model Budgeting** (`/dashboard/model-budgeting`, under Model Masking) and **Quota Tracker** (`/dashboard/quota-tracker`; `/dashboard/quota` redirects there). Quota Tracker shows live quota per connection; Model Budgeting holds self-made limits as described below: a usage tracker per provider and per connection (today / 7 days / this month, last used) from `GET /api/quota` (`connections`, `usage`, `limits`); limits are an optional layer that can be attached directly to a provider or key. Limits are stored in kv `quotaLimits`: a `requests` or `tokens` limit per `provider` or `connection`, window `hour|day|week|month`, `calendar` (server local time boundaries; week starts on Monday) or `rolling`. Usage is computed from `usageHistory` (cancelled is not counted). With `enforce`, the gateway skips targets whose quota is exhausted (the next key / combo member takes over; all exhausted → 429 + `Retry-After`); without `enforce` it only tracks. `GET/POST /api/quota`, `PUT/DELETE /api/quota/{id}`.
+- **Models must be added first**: a model can only be used by clients after it is added to its provider (`kv customModels`, via Providers → Models). The upstream `/models` list is only a catalog to pick from; a model that has not been added is rejected with `404 model_not_added` (aliases and combos follow the same rule; a *restricted* key gets 403 without leaking the name). `/v1/models` shows only models that have been added. `GET /api/provider-nodes/{id}/models` → `{models (added), upstream, error?}`.
+- **Console log** (`/dashboard/console-log`): a 1000-line in-memory buffer (`internal/consolelog`); `GET /api/console-logs/stream` (SSE: `init`, `lines`, `clear`), `GET`/`DELETE /api/console-logs`. The gateway logs one line per request, upstream failures/cooldowns, combo fallback, circuit breaker, loop guard, semaphore queue, and model tests.
+- **Dashboard CPU/RAM**: `GET /api/system` covers the Router-Go process only (CPU % of machine capacity, RSS, Go heap, goroutines; 2-minute history).
+- **Usage**: `GET /api/usage/summary?period=month|today|24h|7d|30d|60d|all` (totals, per-hour/day series, breakdown per model/provider/account/API key/endpoint, 5-minute live, recent) and `POST /api/usage/reset`. Cache tokens are recorded in the `tokens` column (`cached_tokens`).
 
-### Endpoint tambahan & format klien Gemini (selesai, F2b)
-- **Format klien baru `gemini`** (`/v1beta/models/{model}:generateContent|streamGenerateContent|countTokens`, `GET /v1beta/models[/{model}]`). Desain: `serve("gemini")` mengubah body Gemini menjadi request `chat` di awal (`geminiRequest`: model dari URL, `stream` dari aksi `:streamGenerateContent`, bukan dari body), sehingga routing, combo, capability, key pool, usage dan token saver tidak berubah. Hanya sisi respons yang tahu format `gemini`: `relayConverted`/`relayAggregated` merender hub → Gemini (JSON atau SSE), dan error memakai `{error:{code,message,status}}` (`INVALID_ARGUMENT`, `UNAUTHENTICATED`, `NOT_FOUND`, `RESOURCE_EXHAUSTED`, …). Upstream tetap `chat`/`responses`/`messages` (tidak ada node Gemini). Kode: `internal/translate/gemini.go`, `internal/gateway/gemini.go`.
-- Key API Gemini: `Authorization: Bearer`, `x-goog-api-key`, atau `?key=` (query hanya untuk `/v1beta`).
-- `GET /v1/models/info?id=<prefix/model>` dan `GET /v1/models/{prefix/model}`: info satu model (`id`, `owned_by`, `capabilities{vision,reasoning,audioInput}`, `contextWindow` bila diketahui) dari daftar `/v1/models` yang boleh dipakai key; 404 `model_not_found` bila tidak ada/tidak boleh.
-- `POST /v1/messages/count_tokens` → `{input_tokens}` dan Gemini `:countTokens` → `{totalTokens}`: **estimasi lokal** (~4 karakter/token, gambar 1000), tanpa memanggil upstream.
-- `POST /v1/responses/compact`: seperti `/v1/responses`, tetapi node `responses` dipanggil di `/responses/compact`.
-- `POST /v1/api/chat` (Ollama): memakai pipeline chat; `stream` default true; jawaban NDJSON `{model,created_at,message,done}` (tool call dikirim utuh di objek `done`). Dibuat sebagai pembungkus `ResponseWriter` di atas `serve("chat")` (`internal/gateway/endpoints.go`).
+### Additional endpoints & Gemini client format (done, F2b)
+- **New client format `gemini`** (`/v1beta/models/{model}:generateContent|streamGenerateContent|countTokens`, `GET /v1beta/models[/{model}]`). Design: `serve("gemini")` converts the Gemini body into a `chat` request at the start (`geminiRequest`: model from the URL, `stream` from the `:streamGenerateContent` action, not from the body), so routing, combo, capability, key pool, usage and token saver are unchanged. Only the response side knows the `gemini` format: `relayConverted`/`relayAggregated` render hub → Gemini (JSON or SSE), and errors use `{error:{code,message,status}}` (`INVALID_ARGUMENT`, `UNAUTHENTICATED`, `NOT_FOUND`, `RESOURCE_EXHAUSTED`, …). The upstream remains `chat`/`responses`/`messages` (there is no Gemini node). Code: `internal/translate/gemini.go`, `internal/gateway/gemini.go`.
+- Gemini API key: `Authorization: Bearer`, `x-goog-api-key`, or `?key=` (query only for `/v1beta`).
+- `GET /v1/models/info?id=<prefix/model>` and `GET /v1/models/{prefix/model}`: info for one model (`id`, `owned_by`, `capabilities{vision,reasoning,audioInput}`, `contextWindow` when known) from the `/v1/models` list that the key may use; 404 `model_not_found` if it does not exist/is not allowed.
+- `POST /v1/messages/count_tokens` → `{input_tokens}` and Gemini `:countTokens` → `{totalTokens}`: **local estimate** (~4 characters/token, image 1000), without calling the upstream.
+- `POST /v1/responses/compact`: like `/v1/responses`, but `responses` nodes are called at `/responses/compact`.
+- `POST /v1/api/chat` (Ollama): uses the chat pipeline; `stream` defaults to true; NDJSON answer `{model,created_at,message,done}` (tool calls are sent whole in the `done` object). Built as a `ResponseWriter` wrapper on top of `serve("chat")` (`internal/gateway/endpoints.go`).
 
 
-### Kiro — provider dengan protokol sendiri (selesai, eksperimental)
-- **Hook `Native`** (`provider.Provider.Native`, `internal/provider/native.go`): untuk upstream yang tidak berbahasa OpenAI. Provider menyediakan `Endpoints(base, psd)` (daftar URL berurutan), `Request(ctx, NativeCall)` (token, `providerSpecificData` koneksi, id model upstream, body **chat**, flag stream) dan `Response(resp, model, stream)` yang mengubah respons upstream 2xx menjadi respons chat-completions biasa (SSE + `usage` bila stream, JSON bila tidak; di Kiro lewat `io.Pipe` + goroutine decoder, dan menutup body upstream bila klien pergi). Di `attempt` (`proxy.go`) provider ber-`Native` dipanggil lewat `nativeDo` (`internal/gateway/native.go`) dengan `g.Client` dan `ConnCtx` (proxy pool tetap berlaku); format upstream selalu `chat`, jadi klien chat/responses/messages/gemini, combo, rotasi key, kuota, circuit breaker, usage dan peek respons kosong bekerja tanpa perubahan. Status >= 400 dikembalikan apa adanya (klasifikasi/cooldown lama); 401/403/404 pindah ke endpoint berikutnya, status lain tidak. Tes key (`ProbeModel`/`ValidateBuiltin`) lewat jalur yang sama dengan request kecil sungguhan (`probeNative`; `providerSpecificData` koneksi dibawa di context oleh `ConnCtx`).
-- **Protokol** (`internal/provider/kiro`): `POST /generateAssistantResponse` dengan body `conversationState` (giliran user/assistant bergantian, tool definition di giliran terakhir, tool call dipasangkan dengan hasilnya; yang tidak berpasangan atau tanpa definisi diratakan jadi teks), respons berupa AWS event stream biner (frame + CRC32 diverifikasi, frame terpotong = error, bukan jawaban pendek). Endpoint berurutan: `q.<region>.amazonaws.com`, `codewhisperer.us-east-1.amazonaws.com` (+ header `X-Amz-Target`), `runtime.us-east-1.kiro.dev`; region hanya `us-east-1`/`eu-central-1` yang boleh masuk nama host. Akhiran model buatan router: `-thinking` (menambah blok `<thinking_mode>`, budget dari `reasoning_effort`/`thinking.budget_tokens`, default 16000, permintaan eksplisit mengalahkan akhiran) dan `-agentic` (prompt tulis-bertahap); id model dinormalisasi ke ejaan Kiro (`claude-sonnet-4-5-2025…` → `claude-sonnet-4.5`). Teks di dalam `<thinking>` menjadi `reasoning_content`. Tool call dikumpulkan sampai akhir stream; usage dari `metricsEvent`, atau perkiraan dari `contextUsageEvent` bila tidak ada.
-- **Metode auth** (`providerSpecificData.authMethod`): `builder-id` — tombol OAuth, alur device-code AWS (`poll`: daftar client OIDC publik → `device_authorization` → polling `/token`); refresh ke AWS OIDC dengan clientId+clientSecret hasil pendaftaran. `google`/`github`/`imported` (social) — tempel refresh token di dialog Add key; refresh ke `prod.us-east-1.auth.desktop.kiro.dev/refreshToken`. `idc` (IAM Identity Center) — tempel JSON `{"refreshToken","clientId","clientSecret","region"}`; refresh ke `oidc.<region>.amazonaws.com/token`. `external_idp` (Entra) — tempel JSON `{"authMethod":"external_idp","refreshToken","clientId","tokenEndpoint","scope","profileArn"}`; refresh ke token endpoint IdP (hanya host login Microsoft via https) dan request membawa header `TokenType: EXTERNAL_IDP`. Impor (`OAuth.Import`) memvalidasi dengan satu kali refresh sebelum menyimpan; yang ditempel bukan API key, jadi disimpan sebagai koneksi OAuth. Tidak di-port: login browser Google/GitHub (redirect `kiro://`) dan device-code IDC dengan start URL sendiri (keduanya bisa lewat impor), serta auth API key Kiro.
-- **Refresh** (`OAuth.RefreshConn`): varian refresh yang juga menerima `providerSpecificData` koneksi dan boleh mengembalikan `Tokens.Extra` yang digabung ke data koneksi (`UpdateTokens`); dipakai untuk `profileArn` yang baru diketahui (dari jawaban refresh, atau `ListAvailableProfiles`). `secret()` memperbarui map data koneksi yang sedang dipakai request, jadi ARN baru langsung ikut di request yang memicu refresh. Tanpa ARN: ARN default publik (Builder ID / social) dipakai, kecuali akun `idc`/`external_idp` (ARN default milik akun lain → 403). `clientSecret` tidak pernah ikut daftar koneksi di API.
-- **Header**: hanya header statis registry (`User-Agent`, `X-Amz-User-Agent`; bisa diubah di kartu Custom Headers) ditambah header protokol (`Accept` event stream, `Authorization`, `TokenType`, ARN profil, `X-Amz-Target`). Tidak di-port: penanda identitas IDE (`x-amzn-kiro-agent-mode`, `machine-id`, header SDK, fingerprint per akun di `kiroModels`), session replay, konteks waktu di prompt, gerbang integritas/retry perbaikan, daftar model live (`ListAvailableModels`) dan field effort native (`additionalModelRequestFields`). Kuota Kiro: lihat "Quota dari API provider".
-- **Risiko**: Kiro dibuat untuk IDE/CLI Kiro; memakai akunnya lewat router tidak dilisensikan dan akun bisa dibatasi atau ditangguhkan (XRouter-Next menandainya deprecated dengan RISK_NOTICE yang sama). Dicatat di `Provider.Note` (tampil di dashboard). Status `experimental`: semua diuji hanya terhadap mock, belum ke layanan asli.
+### Kiro — a provider with its own protocol (done, experimental)
+- **`Native` hook** (`provider.Provider.Native`, `internal/provider/native.go`): for upstreams that do not speak OpenAI. The provider supplies `Endpoints(base, psd)` (an ordered list of URLs), `Request(ctx, NativeCall)` (token, the connection's `providerSpecificData`, upstream model id, **chat** body, stream flag) and `Response(resp, model, stream)` which turns a 2xx upstream response into a plain chat-completions response (SSE + `usage` if streaming, JSON if not; in Kiro via `io.Pipe` + a decoder goroutine, and it closes the upstream body if the client goes away). In `attempt` (`proxy.go`) a provider with `Native` is invoked through `nativeDo` (`internal/gateway/native.go`) with `g.Client` and `ConnCtx` (the proxy pool still applies); the upstream format is always `chat`, so chat/responses/messages/gemini clients, combo, key rotation, quota, circuit breaker, usage and empty-response peek work unchanged. Status >= 400 is returned as-is (old classification/cooldown); 401/403/404 move to the next endpoint, other statuses do not. The key test (`ProbeModel`/`ValidateBuiltin`) goes through the same path with a small real request (`probeNative`; the connection's `providerSpecificData` is carried in the context by `ConnCtx`).
+- **Protocol** (`internal/provider/kiro`): `POST /generateAssistantResponse` with a `conversationState` body (alternating user/assistant turns, tool definitions on the last turn, tool calls paired with their results; those that are unpaired or lack a definition are flattened into text), the response is a binary AWS event stream (frames + CRC32 verified, a truncated frame = error, not a short answer). Ordered endpoints: `q.<region>.amazonaws.com`, `codewhisperer.us-east-1.amazonaws.com` (+ `X-Amz-Target` header), `runtime.us-east-1.kiro.dev`; only the regions `us-east-1`/`eu-central-1` may enter the host name. Router-made model suffixes: `-thinking` (adds a `<thinking_mode>` block, budget from `reasoning_effort`/`thinking.budget_tokens`, default 16000, an explicit request beats the suffix) and `-agentic` (incremental-write prompt); the model id is normalized to Kiro's spelling (`claude-sonnet-4-5-2025…` → `claude-sonnet-4.5`). Text inside `<thinking>` becomes `reasoning_content`. Tool calls are collected until the end of the stream; usage from `metricsEvent`, or an estimate from `contextUsageEvent` if absent.
+- **Auth methods** (`providerSpecificData.authMethod`): `builder-id` — OAuth button, AWS device-code flow (`poll`: register public OIDC client → `device_authorization` → poll `/token`); refresh to AWS OIDC with the clientId+clientSecret from registration. `google`/`github`/`imported` (social) — paste a refresh token in the Add key dialog; refresh to `prod.us-east-1.auth.desktop.kiro.dev/refreshToken`. `idc` (IAM Identity Center) — paste JSON `{"refreshToken","clientId","clientSecret","region"}`; refresh to `oidc.<region>.amazonaws.com/token`. `external_idp` (Entra) — paste JSON `{"authMethod":"external_idp","refreshToken","clientId","tokenEndpoint","scope","profileArn"}`; refresh to the IdP token endpoint (Microsoft login hosts only, via https) and the request carries the header `TokenType: EXTERNAL_IDP`. Import (`OAuth.Import`) validates with a single refresh before saving; what is pasted is not an API key, so it is stored as an OAuth connection. Not ported: Google/GitHub browser login (`kiro://` redirect) and IDC device-code with its own start URL (both can go through import), as well as Kiro API-key auth.
+- **Refresh** (`OAuth.RefreshConn`): a refresh variant that also receives the connection's `providerSpecificData` and may return `Tokens.Extra`, which is merged into the connection data (`UpdateTokens`); used for a newly learned `profileArn` (from the refresh answer, or `ListAvailableProfiles`). `secret()` updates the connection data map currently used by the request, so the new ARN is included right away in the request that triggered the refresh. Without an ARN: the public default ARN (Builder ID / social) is used, except for `idc`/`external_idp` accounts (another account's default ARN → 403). `clientSecret` is never included in the connection list in the API.
+- **Headers**: only the registry's static headers (`User-Agent`, `X-Amz-User-Agent`; changeable in the Custom Headers card) plus protocol headers (event-stream `Accept`, `Authorization`, `TokenType`, profile ARN, `X-Amz-Target`). Not ported: IDE identity markers (`x-amzn-kiro-agent-mode`, `machine-id`, SDK headers, per-account fingerprint in `kiroModels`), session replay, time context in the prompt, integrity gate/fix retry, live model list (`ListAvailableModels`) and the native effort field (`additionalModelRequestFields`). Kiro quota: see "Quota from the provider API".
+- **Risk**: Kiro is built for the Kiro IDE/CLI; using its account through a router is not licensed and the account may be restricted or suspended (XRouter-Next marks it deprecated with the same RISK_NOTICE). Recorded in `Provider.Note` (shown in the dashboard). Status `experimental`: everything is tested only against mocks, not yet against the real service.
 
-### Quota dari API provider & katalog free tier (selesai, eksperimental)
-Berbeda dengan `/api/quota` (batas buatan user, tidak diubah): ini kuota yang dilaporkan provider sendiri per koneksi, dan jadi data halaman Quota Tracker.
-- **`GET /api/usage/{connectionId}[?force=1]`** (login dashboard; rute statis `/usage/stats` dst. tetap didahulukan chi). Bentuk sama dengan XRouter: `{"plan"?, "message"?, "quotas": {"<nama>": {"used","total","remaining"?,"resetAt"(ISO|null),"unlimited"?,"displayName"?,"recurring"?}}, "raw"?}`; `quotas` selalu ada (`{}` bila kosong). Alur (`internal/api/api_usage_conn.go`): koneksi → node bawaan → `Gateway.Secret` (refresh token OAuth bila hampir habis) → `Provider.Usage` dengan `ConnCtx` (proxy pool koneksi), `OAuthClient` (header statis provider + custom headers) dan timeout 15 dtk. Masalah sign-in/upstream selalu menjadi `message` dengan HTTP 200 (bukan 5xx); koneksi tak dikenal 404; provider tanpa hook → `{"message":"Usage API not implemented for <id>","quotas":{}}`. Token tidak pernah ada di respons.
-- **Cache** 30 dtk per koneksi di memori, hanya untuk jawaban yang berisi kuota; entri tidak dipakai bila key/token berubah (termasuk setelah refresh); `?force=1` melewatinya. Jawaban berisi pesan tidak di-cache.
-- **Hook** `Provider.Usage func(ctx, Doer, UsageCall) (Usage, error)` (`internal/provider/usage.go`; `UsageCall` = `Token`, `Data` (providerSpecificData), `BaseURL` yang bisa di-`Override` di tes). Handler ada di paket provider masing-masing: **Kiro** (`kiro/usage.go`, port `getKiroUsage`: tiga percobaan endpoint codewhisperer GET → POST (`X-Amz-Target`) → Q GET, header `tokentype: API_KEY`/`TokenType: EXTERNAL_IDP`, pesan khusus idc / google-github / lainnya; baris `*_freetrial`), **CodeBuddy intl** (`codebuddy/usage.go`: `POST /billing/meter/get-user-resource`, paket refill (bernama Daily/Weekly/Monthly, `recurring: true`) dipisah dari paket bonus (`Bonus Pack N`, `recurring: false`, `resetAt` = kedaluwarsa)). Cline, OpenCode dan Qoder: XRouter tidak punya handler (Cline/OpenCode) atau handlernya butuh tukar PAT dan Qoder belum bisa dirute di sini, jadi menjawab "not implemented". Freebuff juga menjawab "not implemented": kuotanya hanya terbaca dari endpoint sesi milik CLI-nya sendiri, dan memanggilnya dari luar CLI justru menghabiskan strike akun. Hanya header statis yang dideklarasikan provider yang dikirim; header penyamaran IDE Kiro (`KiroIDE`) tidak di-port.
-- **Dashboard tahu provider mana yang mendukung** lewat field boolean `usage` di tiap item `GET /api/builtin-providers` (`builtinView`).
+### Quota from the provider API & free tier catalog (done, experimental)
+Unlike `/api/quota` (user-made limits, unchanged): this is the quota the provider itself reports per connection, and it is the data for the Quota Tracker page.
+- **`GET /api/usage/{connectionId}[?force=1]`** (dashboard login; static routes `/usage/stats` etc. still take precedence in chi). Same shape as XRouter: `{"plan"?, "message"?, "quotas": {"<name>": {"used","total","remaining"?,"resetAt"(ISO|null),"unlimited"?,"displayName"?,"recurring"?}}, "raw"?}`; `quotas` is always present (`{}` when empty). Flow (`internal/api/api_usage_conn.go`): connection → built-in node → `Gateway.Secret` (refreshes the OAuth token if nearly expired) → `Provider.Usage` with `ConnCtx` (the connection's proxy pool), `OAuthClient` (the provider's static headers + custom headers) and a 15 s timeout. Sign-in/upstream problems always become a `message` with HTTP 200 (not 5xx); unknown connection 404; a provider without the hook → `{"message":"Usage API not implemented for <id>","quotas":{}}`. The token is never in the response.
+- **Cache** 30 s per connection in memory, only for answers that contain quotas; an entry is not used if the key/token changes (including after a refresh); `?force=1` bypasses it. Answers containing a message are not cached.
+- **Hook** `Provider.Usage func(ctx, Doer, UsageCall) (Usage, error)` (`internal/provider/usage.go`; `UsageCall` = `Token`, `Data` (providerSpecificData), `BaseURL` which can be `Override`n in tests). Handlers live in each provider's own package: **Kiro** (`kiro/usage.go`, port of `getKiroUsage`: three endpoint attempts codewhisperer GET → POST (`X-Amz-Target`) → Q GET, headers `tokentype: API_KEY`/`TokenType: EXTERNAL_IDP`, special messages for idc / google-github / others; `*_freetrial` rows), **CodeBuddy intl** (`codebuddy/usage.go`: `POST /billing/meter/get-user-resource`, refill packs (named Daily/Weekly/Monthly, `recurring: true`) separated from bonus packs (`Bonus Pack N`, `recurring: false`, `resetAt` = expiry)). Cline, OpenCode and Qoder: XRouter has no handler (Cline/OpenCode) or its handler needs a PAT exchange and Qoder cannot be routed here yet, so they answer "not implemented". Freebuff also answers "not implemented": its quota can only be read from the session endpoint of its own CLI, and calling it from outside the CLI actually burns the account's strikes. Only the static headers declared by the provider are sent; Kiro's IDE impersonation headers (`KiroIDE`) are not ported.
+- **The dashboard knows which providers support it** through the boolean field `usage` on each item of `GET /api/builtin-providers` (`builtinView`).
 
-## 4. Roadmap fase berikutnya (ringkas)
+## 4. Roadmap for next phases (summary)
 
-| Fase | Isi |
+| Phase | Contents |
 |---|---|
-| 2a | **(§3b, dikerjakan)** translator chat↔responses↔messages, `/v1/messages`, anthropic-compatible node, combo, alias/custom models, per-key access |
-| 2b | Translator Gemini (klien, selesai), pricing/cost, Dockerfile |
-| 3 | Provider API-key bawaan (OpenAI, Anthropic, Gemini, DeepSeek, …) via registry data-driven |
-| 4 | Provider OAuth + token refresh, quota, request details/observability |
+| 2a | **(§3b, done)** translator chat↔responses↔messages, `/v1/messages`, anthropic-compatible node, combo, alias/custom models, per-key access |
+| 2b | Gemini translator (client, done), pricing/cost, Dockerfile |
+| 3 | Built-in API-key providers (OpenAI, Anthropic, Gemini, DeepSeek, …) via a data-driven registry |
+| 4 | OAuth providers + token refresh, quota, request details/observability |
 | 5 | Media (image/TTS/STT/video), embeddings custom node, MCP |
 | 6 | Tunnel, MITM, CLI tools, skills, SSO (OIDC/SAML), launcher/tray, updater |
 
-## 5. Risiko
-| Risiko | Mitigasi |
+## 5. Risks
+| Risk | Mitigation |
 |---|---|
-| Skema/format JSON `data` berbeda halus dari Next | Struct Go memakai `map[string]any` untuk field tak dikenal agar round-trip tidak menghilangkan data |
-| Skala XRouter-Next sangat besar (37 executor, 40+ translator) | Port bertahap, checklist eksplisit, tiap fase bisa dirilis |
-| Streaming SSE bocor/buffer | Test integrasi dengan mock upstream, `http.Flusher`, context cancel |
-| Lockout/limit login salah → terkunci | Reset via `router-go --reset-password` (menghapus `settings.password`) |
+| The schema/JSON format of `data` differs subtly from Next | Go structs use `map[string]any` for unknown fields so a round-trip does not lose data |
+| XRouter-Next is very large (37 executors, 40+ translators) | Incremental port, explicit checklist, each phase can be released |
+| SSE streaming leaks/buffers | Integration tests with a mock upstream, `http.Flusher`, context cancel |
+| Lockout/login limit → locked out | Reset via `router-go --reset-password` (deletes `settings.password`) |
 
-### Proxy pools (selesai)
-- Pool = proxy biasa (`http(s)://`, `socks5://`) atau relay yang di-deploy user ke Vercel (Edge function) / Cloudflare (Worker) memakai token API (dipakai sekali, tidak disimpan).
-- Key memilih pool lewat `providerSpecificData.proxyPoolId` (dialog Edit key). Semua panggilan upstream (chat, test key, test model) lewat satu `http.RoundTripper` yang membaca pool dari context.
-- `strictProxy`: pool nonaktif → request gagal, bukan jatuh ke IP langsung. Pool terhapus → key kembali langsung.
-- Relay memakai secret per-deploy (`x-relay-key`) dan tidak menyimpan log/header apa pun.
-- Test key/model selalu streaming (CodeBuddy menolak non-stream; beberapa upstream menjawab stream jauh lebih cepat).
+### Proxy pools (done)
+- A pool = a regular proxy (`http(s)://`, `socks5://`) or a relay that the user deploys to Vercel (Edge function) / Cloudflare (Worker) using an API token (used once, not stored).
+- A key selects a pool through `providerSpecificData.proxyPoolId` (Edit key dialog). All upstream calls (chat, key test, model test) go through a single `http.RoundTripper` that reads the pool from the context.
+- `strictProxy`: pool disabled → the request fails, instead of falling back to the direct IP. Pool deleted → the key goes direct again.
+- The relay uses a per-deploy secret (`x-relay-key`) and stores no logs/headers at all.
+- Key/model tests always stream (CodeBuddy rejects non-stream; some upstreams answer streams much faster).
