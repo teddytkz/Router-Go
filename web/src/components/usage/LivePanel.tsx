@@ -27,8 +27,10 @@ export function LivePanel({ data }: { data: UsageSummary | undefined }) {
       <h2 className="font-semibold">Recent Requests</h2>
       {!data?.recent.length ? <EmptyState icon={<Inbox className="size-5" />} title="No recent requests" />
         : (
-          <ul className="max-h-64 lg:max-h-none lg:flex-1 lg:min-h-40 overflow-y-auto -mx-1 divide-y divide-border">
-            {data.recent.slice(0, 6).map((r) => (
+          // on wide screens the list fills whatever height the neighbouring card sets (absolute, so 30 rows never stretch the row) and scrolls
+          <div className="lg:relative lg:flex-1 lg:min-h-40">
+          <ul className="max-h-64 lg:max-h-none lg:absolute lg:inset-0 overflow-y-auto -mx-1 divide-y divide-border">
+            {data.recent.map((r) => (
               <li key={r.id} className="flex items-center gap-2 px-1 py-2 text-[13px]">
                 <span className={cn("size-2 rounded-full shrink-0", r.status === "ok" ? "bg-ok" : r.status === "canceled" ? "bg-warn" : "bg-err")} aria-label={r.status} />
                 <span className="font-mono truncate flex-1 min-w-0" title={r.model}>{r.model}</span>
@@ -37,6 +39,7 @@ export function LivePanel({ data }: { data: UsageSummary | undefined }) {
               </li>
             ))}
           </ul>
+          </div>
         )}
     </Card>
   );

@@ -169,7 +169,7 @@ export function ModelsCard({ node }: { node: ProviderNode }) {
                             </button>
                             <button type="button" onClick={() => test(id)} disabled={testing} title={`Test ${code(id)}`} aria-label={`Test ${id}`}
                               className="grid place-items-center self-stretch rounded-r-lg border-l border-dashed border-border px-2 text-muted hover:bg-surface-2 hover:text-accent disabled:opacity-60 cursor-pointer">
-                              {testing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : r?.state === "ok" ? <Check className="size-4 text-ok" aria-hidden /> : r?.state === "fail" ? <X className="size-4 text-err" aria-hidden /> : <Zap className="size-4" aria-hidden />}
+                              {testing ? <Loader2 className="size-4 animate-spin" aria-hidden /> : r?.state === "ok" ? <Check className="size-4 text-ok" aria-hidden /> : <Zap className={cn("size-4", r?.state === "fail" && "text-err")} aria-hidden />}
                               {r?.state === "ok" && <span className="sr-only">Test passed: {r.msg}</span>}
                             </button>
                           </>

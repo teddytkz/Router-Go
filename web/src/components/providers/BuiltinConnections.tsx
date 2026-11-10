@@ -12,7 +12,7 @@ import { connState, ProxyBadge } from "./shared";
 type Run = { state: "queued" | "testing" | "success" | "failed"; error?: string };
 const iconBtn = "flex flex-col items-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] leading-none text-muted hover:bg-surface-2 hover:text-text cursor-pointer";
 
-function Row({ p, c, first, last, busy, run, checked, onCheck, onUp, onDown }: { p: BuiltinProvider; c: Connection; first: boolean; last: boolean; busy: boolean; run?: Run; checked: boolean; onCheck: (v: boolean) => void; onUp: () => void; onDown: () => void }) {
+function Row({ p, c, first, last, busy, run, checked, onCheck, onUp, onDown, onTest }: { p: BuiltinProvider; c: Connection; first: boolean; last: boolean; busy: boolean; run?: Run; checked: boolean; onCheck: (v: boolean) => void; onUp: () => void; onDown: () => void; onTest: () => void }) {
   const toast = useToast(), patch = usePatchConnection(), del = useDeleteConnection();
   const [edit, setEdit] = useState(false), [confirm, setConfirm] = useState(false);
   const st = connState(c), b = STATE_BADGE[st];
@@ -41,6 +41,7 @@ function Row({ p, c, first, last, busy, run, checked, onCheck, onUp, onDown }: {
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1 self-end sm:self-auto">
+        <button type="button" className={cn(iconBtn, "disabled:opacity-50 disabled:cursor-not-allowed")} disabled={busy || run?.state === "queued" || run?.state === "testing"} onClick={onTest} aria-label={`Test ${c.name}`}><Zap className="size-4" />Test</button>
         <button type="button" className={iconBtn} onClick={() => setEdit(true)} aria-label={`Edit ${c.name}`}><Pencil className="size-4" />Edit</button>
         <button type="button" className={cn(iconBtn, "hover:text-err")} onClick={() => setConfirm(true)} aria-label={`Delete ${c.name}`}><Trash2 className="size-4" />Delete</button>
         <Switch checked={c.isActive} label={`${c.name} enabled`} disabled={patch.isPending} onChange={(v) => patch.mutate({ id: c.id, isActive: v }, { onError: (e) => toast("err", errText(e)) })} />
@@ -132,8 +133,8 @@ export function BuiltinConnections({ p, conns, onAdd }: { p: BuiltinProvider; co
       )}
       {sorted.length ? (
         <ul className="divide-y divide-border">
-          {sorted.map((c, i) => <Row key={c.id} p={p} c={c} first={i === 0} last={i === sorted.length - 1} busy={moving} run={runs[c.id]} checked={sel.has(c.id)}
-            onCheck={(v) => setSel((s) => { const n = new Set(s); if (v) n.add(c.id); else n.delete(c.id); return n; })} onUp={() => move(i, -1)} onDown={() => move(i, 1)} />)}
+          {sorted.map((c, i) => <Row key={c.id} p={p} c={c} first={i === 0} last={i === sorted.length - 1} busy={moving || running} run={runs[c.id]} checked={sel.has(c.id)}
+            onCheck={(v) => setSel((s) => { const n = new Set(s); if (v) n.add(c.id); else n.delete(c.id); return n; })} onUp={() => move(i, -1)} onDown={() => move(i, 1)} onTest={() => run([c])} />)}
         </ul>
       ) : <EmptyState icon={<KeyRound className="size-6" />} title="No connections yet"
         body={unsupported ? p.note || "This provider cannot be used yet." : p.noAuth ? "No key is needed: it is set up automatically on the first request. Enable it now to see it here." : "Add an API key so requests can be routed to this provider."} />}

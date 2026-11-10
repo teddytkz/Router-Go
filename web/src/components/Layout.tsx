@@ -1,4 +1,4 @@
-import { Activity, Gauge, Hourglass, Terminal, KeyRound, Layers, Boxes, LayoutDashboard, Network, LogOut, Menu, Moon, Server, Settings, Sun, X } from "lucide-react";
+import { Activity, Gauge, Hourglass, Terminal, KeyRound, Layers, Boxes, Ruler, LayoutDashboard, Network, LogOut, Menu, Moon, Server, Settings, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useLogout } from "../lib/hooks";
@@ -11,10 +11,11 @@ const sections = [
     { to: "/dashboard/combos", label: "Combos", icon: Layers },
     { to: "/dashboard/usage", label: "Usage", icon: Activity },
     { to: "/dashboard/token-saver", label: "Token Saver", icon: Gauge },
-    { to: "/dashboard/quota", label: "Quota Tracker", icon: Hourglass },
+    { to: "/dashboard/quota-tracker", label: "Quota Tracker", icon: Hourglass },
   ] },
   { title: "System", items: [
     { to: "/dashboard/model-masking", label: "Model Masking", icon: Boxes },
+    { to: "/dashboard/model-budgeting", label: "Model Budgeting", icon: Ruler },
     { to: "/dashboard/proxy-pools", label: "Proxy Pools", icon: Network },
     { to: "/dashboard/api-keys", label: "API Keys", icon: KeyRound },
     { to: "/dashboard/console-log", label: "Console Log", icon: Terminal },

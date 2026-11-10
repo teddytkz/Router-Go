@@ -3,8 +3,9 @@ import { ArrowLeft, ExternalLink, Info, TriangleAlert } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import type { BuiltinProvider, Connection } from "../../lib/api";
-import { useConnections, useCreateConnection } from "../../lib/hooks";
-import { Badge, Button, Card, errText, Field, Input, Modal, Skeleton, cn, useToast } from "../ui";
+import { useCheckBuiltinKey, useConnections } from "../../lib/hooks";
+import { Badge, Card, Skeleton, cn } from "../ui";
+import { AddKeyDialog } from "./AddKeyDialog";
 import { BuiltinConnections } from "./BuiltinConnections";
 import { BuiltinHeaders } from "./BuiltinHeaders";
 import { BuiltinModels } from "./BuiltinModels";
@@ -13,7 +14,7 @@ import { StatusLine, summarize } from "./shared";
 const TONE = { oauth: "var(--accent)", free: "var(--ok)", apikey: "var(--warn)" } as const;
 
 // Providers with a logo in public/providers/{id}.png (copied from XRouter-Next); every other provider keeps its initials.
-const LOGOS = new Set(["opencode", "freebuff", "codebuddy-intl", "qoder", "cline", "kiro"]);
+const LOGOS = new Set(["opencode", "freebuff", "codebuddy-intl", "qoder", "cline", "kiro", "tokenharbor"]);
 
 function Tile({ p, className = "size-10 text-sm" }: { p: BuiltinProvider; className?: string }) {
   const [broken, setBroken] = useState(false);
@@ -42,18 +43,9 @@ export function BuiltinCard({ p, conns, now }: { p: BuiltinProvider; conns: Conn
 }
 
 function AddKeyModal({ p, count, onClose }: { p: BuiltinProvider; count: number; onClose: () => void }) {
-  const toast = useToast(), create = useCreateConnection();
-  const [name, setName] = useState(`Key ${count + 1}`), [key, setKey] = useState("");
-  return (
-    <Modal open onClose={onClose} title={`Add API key to ${p.name}`}
-      footer={<><Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" loading={create.isPending} disabled={!name.trim() || (!p.noAuth && !key.trim())}
-          onClick={() => create.mutate({ provider: p.id, name: name.trim(), apiKey: key.trim() }, { onSuccess: () => { toast("ok", "Key added"); onClose(); }, onError: (e) => toast("err", errText(e)) })}>Add key</Button></>}>
-      <p className="text-muted text-[13px]">Keys are tried in priority order; if one is rate-limited or rejected the next takes over automatically.</p>
-      <Field label="Name">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
-      <Field label="API key / token" hint={p.authHint || undefined}>{(id) => <Input id={id} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} />}</Field>
-    </Modal>
-  );
+  const check = useCheckBuiltinKey();
+  return <AddKeyDialog title={`Add API key to ${p.name}`} provider={p.id} count={count} keyOptional={p.noAuth} hint={p.authHint || undefined} onClose={onClose}
+    check={p.category === "apikey" ? (apiKey) => check.mutateAsync({ id: p.id, apiKey }) : undefined} />;
 }
 
 function Website({ url }: { url: string }) {

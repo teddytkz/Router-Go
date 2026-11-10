@@ -1,9 +1,10 @@
 import { ArrowDown, ArrowUp, KeyRound, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import type { Connection, ProviderNode, TestBatch } from "../../lib/api";
-import { useCreateConnection, useDeleteConnection, usePatchConnection, useProxyPools, useTestBatch, useTestConnection, useValidateNode } from "../../lib/hooks";
+import { useDeleteConnection, usePatchConnection, useProxyPools, useTestBatch, useTestConnection, useValidateNode } from "../../lib/hooks";
 import { Badge, Button, Card, ConfirmModal, EmptyState, errText, Field, Input, Modal, Select, Switch, useToast } from "../ui";
 import { connState, ProxyBadge, type ConnState } from "./shared";
+import { AddKeyDialog } from "./AddKeyDialog";
 import { ApplyProxy } from "./ApplyProxy";
 import { TestResultsModal } from "./TestResultsModal";
 
@@ -22,27 +23,9 @@ export function CooldownTimer({ until }: { until: string }) {
 
 // ---------- add / edit ----------
 export function AddKeyModal({ node, count, onClose }: { node: ProviderNode; count: number; onClose: () => void }) {
-  const toast = useToast(), create = useCreateConnection(), validate = useValidateNode();
-  const [name, setName] = useState(`Key ${count + 1}`), [key, setKey] = useState("");
-  const [check, setCheck] = useState<{ ok: boolean; text: string } | null>(null);
-  const runCheck = () => validate.mutate({ type: node.type, baseUrl: node.baseUrl, ...(node.type === "anthropic-compatible" ? {} : { apiType: node.apiType }), apiKey: key }, {
-    onSuccess: (r) => setCheck({ ok: r.valid, text: r.valid ? "Valid" : `Invalid — ${r.error ?? "check failed"}` }),
-    onError: (e) => setCheck({ ok: false, text: `Invalid — ${errText(e)}` }),
-  });
-  return (
-    <Modal open onClose={onClose} title={`Add API key to ${node.name}`}
-      footer={<><Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" loading={create.isPending} disabled={!name.trim()}
-          onClick={() => create.mutate({ provider: node.id, name: name.trim(), apiKey: key }, { onSuccess: () => { toast("ok", "Key added"); onClose(); }, onError: (e) => toast("err", errText(e)) })}>Add key</Button></>}>
-      <p className="text-muted text-[13px]">Keys are tried in priority order; if one is rate-limited or rejected the next takes over automatically.</p>
-      <Field label="Name">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
-      <Field label="API key" hint="Leave empty for upstreams without auth (e.g. local Ollama)">{(id) => <Input id={id} type="password" autoComplete="off" value={key} onChange={(e) => { setKey(e.target.value); setCheck(null); }} placeholder="sk-…" />}</Field>
-      <div className="flex items-center gap-3">
-        <Button onClick={runCheck} loading={validate.isPending}><Zap className="size-4" />Check</Button>
-        {check && <span role="status" className={`text-[13px] ${check.ok ? "text-ok" : "text-err"} break-words min-w-0`}>{check.text}</span>}
-      </div>
-    </Modal>
-  );
+  const validate = useValidateNode();
+  return <AddKeyDialog title={`Add API key to ${node.name}`} provider={node.id} count={count} keyOptional hint="Leave empty for upstreams without auth (e.g. local Ollama)" onClose={onClose}
+    check={(apiKey) => validate.mutateAsync({ type: node.type, baseUrl: node.baseUrl, ...(node.type === "anthropic-compatible" ? {} : { apiType: node.apiType }), apiKey })} />;
 }
 
 export function EditKeyModal({ c, onClose }: { c: Connection; onClose: () => void }) {

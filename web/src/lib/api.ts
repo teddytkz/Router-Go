@@ -123,6 +123,4 @@ export type QuotaData = { limits: QuotaLimit[]; usage: QuotaUsage[]; connections
 // Live provider quota (GET /api/usage/{connectionId}); XRouter's shape. Object key order is not guaranteed by the backend.
 export type LiveQuota = { used: number; total: number; remaining?: number; resetAt?: string | null; unlimited?: boolean; displayName?: string; recurring?: boolean };
 export type LiveUsage = { plan?: string; message?: string; quotas?: Record<string, LiveQuota>; raw?: unknown };
-export type FreeRefresh = "daily" | "weekly" | "monthly" | "one-time" | "rolling";
 // A provider row has modelId null and carries the cadence; its model rows follow.
-export type FreeTier = { providerId: string; providerName: string; providerAlias: string; freeRefresh: FreeRefresh | null; modelId: string | null; modelName: string | null };

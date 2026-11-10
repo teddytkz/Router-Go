@@ -1,5 +1,6 @@
-import { ArrowRight, Boxes, Pencil, Plus, Tag, Trash2 } from "lucide-react";
-import { useId, useState } from "react";
+import { ArrowRight, Boxes, ListChecks, Pencil, Plus, Tag, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { ModelPicker, type PickGroup } from "../components/ModelPicker";
 import { Badge, Button, Card, ConfirmModal, EmptyState, errText, Field, Input, Modal, PageHeader, Select, Skeleton, useToast } from "../components/ui";
 import type { CustomModel } from "../lib/api";
 import { useAddCustomModel, useAliases, useAllModels, useCombos, useCustomModels, useDeleteAlias, useDeleteCustomModel, useNodes, useAllNodes, useSetAlias } from "../lib/hooks";
@@ -9,16 +10,34 @@ const th = "text-left text-xs font-medium text-muted px-4 py-2";
 
 // ---------- masks (stored as aliases) ----------
 function AliasModal({ alias, model, onClose }: { alias?: string; model?: string; onClose: () => void }) {
-  const toast = useToast(), set = useSetAlias(), nodes = useAllNodes(), models = useAllModels(nodes.data), combos = useCombos(), listId = useId();
-  const [a, setA] = useState(alias ?? ""), [m, setM] = useState(model ?? "");
+  const toast = useToast(), set = useSetAlias(), nodes = useAllNodes(), models = useAllModels(nodes.data), combos = useCombos();
+  const [a, setA] = useState(alias ?? ""), [m, setM] = useState(model ?? ""), [picking, setPicking] = useState(false), [draft, setDraft] = useState<string[]>([]);
   const submit = () => set.mutate({ alias: a.trim(), model: m.trim() }, { onSuccess: () => { toast("ok", "Mask saved"); onClose(); }, onError: (e) => toast("err", errText(e)) });
+  // models grouped by provider, plus combos: either can sit behind a mask
+  const groups = useMemo<PickGroup[]>(() => {
+    const by = new Map<string, string[]>();
+    for (const x of models.data ?? []) { const p = x.slice(0, x.indexOf("/")); by.set(p, [...(by.get(p) ?? []), x]); }
+    const out: PickGroup[] = [...by].map(([prefix, ms]) => ({ key: prefix, label: nodes.data?.find((n) => n.prefix === prefix)?.name ?? prefix, models: ms }));
+    const cs = (combos.data ?? []).map((c) => c.name);
+    return cs.length ? [{ key: "__combos", label: "Combos", models: cs }, ...out] : out;
+  }, [models.data, nodes.data, combos.data]);
+
+  if (picking) {
+    return (
+      <Modal open onClose={() => setPicking(false)} title="Select real model or combo"
+        footer={<><Button onClick={() => setPicking(false)}>Back</Button><Button variant="primary" disabled={!draft.length} onClick={() => { setM(draft[0]); setPicking(false); }}>Use {draft[0] ?? "…"}</Button></>}>
+        <p className="text-[13px] text-muted -mt-1">Pick one model or combo. Choosing another replaces the current pick.</p>
+        <ModelPicker groups={groups} selected={draft} onChange={(v) => setDraft(v.slice(-1))} />
+      </Modal>
+    );
+  }
   return (
     <Modal open onClose={onClose} title={alias ? "Edit mask" : "New mask"}
       footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" loading={set.isPending} disabled={!a.trim() || !m.trim()} onClick={submit}>Save</Button></>}>
       <Field label="Masked name" hint="The name clients will send as the model">{(id) => <Input id={id} className="font-mono" value={a} onChange={(e) => setA(e.target.value)} disabled={!!alias} placeholder="fast" />}</Field>
-      <Field label="Real model or combo" hint="prefix/model or a combo name — pick one or type it">
-        {(id) => <><Input id={id} list={listId} className="font-mono" value={m} onChange={(e) => setM(e.target.value)} placeholder="openai/gpt-4o-mini" />
-          <datalist id={listId}>{[...(combos.data ?? []).map((c) => c.name), ...(models.data ?? [])].map((x) => <option key={x} value={x} />)}</datalist></>}
+      <Field label="Real model or combo" hint="prefix/model or a combo name — choose from the list or type it">
+        {(id) => <div className="flex gap-2"><Input id={id} className="font-mono" value={m} onChange={(e) => setM(e.target.value)} placeholder="openai/gpt-4o-mini" />
+          <Button onClick={() => { setDraft(m.trim() ? [m.trim()] : []); setPicking(true); }}><ListChecks className="size-4" />Choose</Button></div>}
       </Field>
     </Modal>
   );

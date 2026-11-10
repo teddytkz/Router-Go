@@ -8,4 +8,5 @@ import (
 	_ "router-go/internal/provider/kiro"
 	_ "router-go/internal/provider/opencode-free"
 	_ "router-go/internal/provider/qoder"
+	_ "router-go/internal/provider/tokenharbor"
 )

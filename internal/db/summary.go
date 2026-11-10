@@ -188,7 +188,7 @@ func (s *Store) Summary(period string) (*Summary, error) {
 	}
 	sum.Live.AvgLatencyMs = int(avg.Float64)
 	sum.Live.RPM = float64(sum.Live.Requests) / 5
-	if sum.Recent, _, err = s.History(10, 0, "", "", ""); err != nil {
+	if sum.Recent, _, err = s.History(30, 0, "", "", ""); err != nil {
 		return nil, err
 	}
 	sum.ProviderActivity, err = s.providerActivity(now)

@@ -1,7 +1,7 @@
 // TanStack Query hooks. Query keys are grouped so a mutation can invalidate exactly what it changed.
 import { useCallback, useMemo } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type ActiveRequest, type ApiKey, type AuthStatus, type BuiltinProvider, type Combo, type ComboStrategy, type Connection, type CustomModel, type FreeTier, type LiveUsage, type KeyAccess, type ModelCapsOverride, type ModelTestResult, type NodeModels, type NodeType, type ProviderNode, type ProxyPool, type ProxyPoolBody, type QuotaBody, type QuotaData, type RoutingHealthRow, type SysSnapshot, type TestBatch, type Settings, type Stats, type UsagePeriod, type UsageRow, type UsageSummary, type ValidateResult } from "./api";
+import { api, ApiError, type ActiveRequest, type ApiKey, type AuthStatus, type BuiltinProvider, type Combo, type ComboStrategy, type Connection, type CustomModel, type LiveUsage, type KeyAccess, type ModelCapsOverride, type ModelTestResult, type NodeModels, type NodeType, type ProviderNode, type ProxyPool, type ProxyPoolBody, type QuotaBody, type QuotaData, type RoutingHealthRow, type SysSnapshot, type TestBatch, type Settings, type Stats, type UsagePeriod, type UsageRow, type UsageSummary, type ValidateResult } from "./api";
 
 export const useAuthStatus = () => useQuery({ queryKey: ["auth"], queryFn: () => api<AuthStatus>("/api/auth/status"), staleTime: 30_000 });
 export const useSettings = () => useQuery({ queryKey: ["settings"], queryFn: () => api<Settings>("/api/settings") });
@@ -94,7 +94,8 @@ export const useCreateNode = () => useMut((v: Record<string, unknown>) => api<{ 
 export const useUpdateNode = () => useMut((v: { id: string } & Record<string, unknown>) => api(`/api/provider-nodes/${v.id}`, { method: "PATCH", json: v }), [["nodes"], ["connections"], ["models"]]);
 export const useDeleteNode = () => useMut((id: string) => api(`/api/provider-nodes/${id}`, { method: "DELETE" }), [["nodes"], ["connections"], ["models"]]);
 export const useValidateNode = () => useMut((v: { type: NodeType; baseUrl: string; apiType?: string; apiKey: string; modelId?: string }) => api<ValidateResult>("/api/provider-nodes/validate", { method: "POST", json: v }), []);
-export const useCreateConnection = () => useMut((v: { provider: string; name: string; apiKey: string }) => api<{ connection: Connection }>("/api/providers", { method: "POST", json: v }), [["connections"], ["models"], ["builtinProviders"]]);
+export const useCreateConnection = () => useMut((v: { provider: string; name: string; apiKey: string; priority?: number; proxyPoolId?: string }) => api<{ connection: Connection }>("/api/providers", { method: "POST", json: v }), [["connections"], ["models"], ["builtinProviders"]]);
+export const useCheckBuiltinKey = () => useMut((v: { id: string; apiKey: string }) => api<ValidateResult>(`/api/builtin-providers/${v.id}/validate`, { method: "POST", json: { apiKey: v.apiKey } }), []);
 export const usePatchConnection = () => useMut((v: { id: string } & Record<string, unknown>) => api(`/api/providers/${v.id}`, { method: "PATCH", json: v }), [["connections"], ["models"], ["builtinProviders"]]);
 export const useDeleteConnection = () => useMut((id: string) => api(`/api/providers/${id}`, { method: "DELETE" }), [["connections"], ["models"], ["builtinProviders"]]);
 export const useTestConnection = () => useMut((v: { id: string; modelId?: string }) => api<ValidateResult>(`/api/providers/${v.id}/test`, { method: "POST", json: { modelId: v.modelId } }), [["connections"], ["models"]]);
@@ -142,7 +143,6 @@ export const useSaveQuota = () => useMut((v: { id?: string; body: QuotaBody }) =
 export const useDeleteQuota = () => useMut((id: string) => api(`/api/quota/${id}`, { method: "DELETE" }), [["quota"]]);
 
 // ---------- live provider quota (XRouter-style Quota Tracker) ----------
-export const useFreeTiers = () => useQuery({ queryKey: ["freeTiers"], queryFn: () => api<{ tiers: FreeTier[] }>("/api/free-tiers").then((r) => r.tiers), staleTime: 300_000 });
 
 const QUOTA_CACHE_KEY = "quotaCacheData";
 type QuotaCache = Record<string, { data: LiveUsage; cachedAt: string }>;

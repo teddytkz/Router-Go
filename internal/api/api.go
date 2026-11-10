@@ -99,6 +99,7 @@ func Handler(cfg *config.Config, store *db.Store, spa http.Handler) http.Handler
 			r.Put("/builtin-providers/{id}/headers", a.setProviderHeaders)
 			r.Delete("/builtin-providers/{id}/headers", a.resetProviderHeaders)
 			r.Post("/builtin-providers/{id}/models", a.bulkBuiltinModels)
+			r.Post("/builtin-providers/{id}/validate", a.validateBuiltinKey)
 			r.Get("/provider-config", func(w http.ResponseWriter, _ *http.Request) {
 				writeJSON(w, 200, map[string]any{"configs": a.Store.ProviderConfigs()})
 			})
@@ -139,7 +140,6 @@ func Handler(cfg *config.Config, store *db.Store, spa http.Handler) http.Handler
 			r.Get("/usage/history", a.usageHistory)
 			r.Get("/usage/summary", a.usageSummary)
 			r.Get("/usage/{connectionId}", a.connectionUsage)
-			r.Get("/free-tiers", a.freeTiers)
 			r.Get("/system", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, sysstat.Default.Snapshot()) })
 			r.Get("/health/routing", a.routingHealth)
 			r.Get("/console-logs", func(w http.ResponseWriter, _ *http.Request) {
@@ -731,12 +731,20 @@ func (a *API) listConnections(w http.ResponseWriter, r *http.Request) {
 
 func (a *API) createConnection(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Provider string `json:"provider"`
-		Name     string `json:"name"`
-		APIKey   string `json:"apiKey"`
+		Provider    string   `json:"provider"`
+		Name        string   `json:"name"`
+		APIKey      string   `json:"apiKey"`
+		Priority    *float64 `json:"priority"`    // default: after the last key
+		ProxyPoolID string   `json:"proxyPoolId"` // optional
 	}
 	if !readJSON(w, r, &in) {
 		return
+	}
+	if in.ProxyPoolID != "" {
+		if _, err := a.Store.ProxyPool(in.ProxyPoolID); err != nil {
+			writeErr(w, 400, "proxy pool not found")
+			return
+		}
 	}
 	node, err := a.Store.Node(in.Provider)
 	if err != nil {
@@ -765,8 +773,17 @@ func (a *API) createConnection(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	a.enableCatalogueIfFirst(node)
 	in.Name, in.APIKey = strings.TrimSpace(in.Name), strings.TrimSpace(in.APIKey)
+	verified := false
+	if p, ok := node.Builtin(); ok && p.Category == provider.CategoryAPIKey { // refuse a key the provider itself rejects; an outage does not block adding
+		res := a.GW.ValidateBuiltin(r.Context(), node, in.APIKey)
+		if res.Rejected {
+			writeErr(w, 400, "Key rejected by "+p.Name+": "+res.Error)
+			return
+		}
+		verified = res.Valid
+	}
+	a.enableCatalogueIfFirst(node)
 	if in.Name == "" {
 		writeErr(w, 400, "name is required")
 		return
@@ -780,8 +797,52 @@ func (a *API) createConnection(w http.ResponseWriter, r *http.Request) {
 		dbErr(w, err)
 		return
 	}
+	if in.ProxyPoolID != "" {
+		if err := a.Store.SetConnectionProxy(c.ID, in.ProxyPoolID); err != nil {
+			dbErr(w, err)
+			return
+		}
+	}
+	if in.Priority != nil && *in.Priority >= 1 {
+		_, _ = a.Store.PatchConnection(c.ID, map[string]any{"priority": *in.Priority}, nil)
+	}
+	// A new key should not sit at "untested": a built-in key that just passed is marked connected; a custom node's key is
+	// checked now (GET /models, no chat call) and the outcome recorded, good or bad.
+	if verified {
+		a.Store.MarkConnection(c.ID, 0, "", 0, 0)
+	} else if node.Type != db.NodeTypeBuiltin {
+		a.runConnectionTest(r.Context(), c, node, "")
+	}
+	if fresh, err := a.Store.Connection(c.ID); err == nil {
+		c = fresh
+	}
 	a.GW.InvalidateModels(node.ID)
 	writeJSON(w, 201, map[string]any{"connection": c.Flat()})
+}
+
+// validateBuiltinKey: POST /api/builtin-providers/{id}/validate — the "Check" button of the add-key dialog. Only for
+// plain API-key providers; other built-ins take tokens that are not keys (sign-in imports) and are checked on save.
+func (a *API) validateBuiltinKey(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		APIKey string `json:"apiKey"`
+	}
+	if !readJSON(w, r, &in) {
+		return
+	}
+	node, err := a.Store.Node(chi.URLParam(r, "id"))
+	if err != nil {
+		dbErr(w, err)
+		return
+	}
+	if p, ok := node.Builtin(); !ok || p.Category != provider.CategoryAPIKey {
+		writeErr(w, 400, "this provider has no key check")
+		return
+	}
+	if strings.TrimSpace(in.APIKey) == "" {
+		writeErr(w, 400, "apiKey is required")
+		return
+	}
+	writeJSON(w, 200, a.GW.ValidateBuiltin(r.Context(), node, strings.TrimSpace(in.APIKey)))
 }
 
 func (a *API) patchConnection(w http.ResponseWriter, r *http.Request) {

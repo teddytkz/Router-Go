@@ -86,7 +86,7 @@ export function BuiltinModels({ p }: { p: BuiltinProvider }) {
                   <CapBadges caps={m.effective} detected={m.detected} size="xs" />
                   <div className="flex shrink-0 items-center gap-0.5">
                     <button type="button" className={cn(act, "text-warn hover:bg-warn-soft")} disabled={testing} onClick={() => test(m.id)} aria-label={`Test ${code(m.id)}`} title="Test">
-                      {testing ? <Loader2 className="size-4 animate-spin" /> : r?.state === "ok" ? <Check className="size-4 text-ok" /> : r?.state === "fail" ? <X className="size-4 text-err" /> : <Zap className="size-4" />}
+                      {testing ? <Loader2 className="size-4 animate-spin" /> : r?.state === "ok" ? <Check className="size-4 text-ok" /> : <Zap className={cn("size-4", r?.state === "fail" && "text-err")} />}
                     </button>
                     <button type="button" className={cn(act, "text-accent hover:bg-accent-soft")} disabled={!custom.data?.some((c) => c.providerAlias === p.alias && c.id === m.id)} onClick={() => setEditing(m.id)} aria-haspopup="dialog" aria-label={`Edit capabilities of ${m.id}`} title="Edit capabilities"><SlidersHorizontal className="size-4" /></button>
                     <button type="button" className={cn(act, "text-err hover:bg-err-soft")} disabled={busy === m.id} onClick={() => disable(m.id)} aria-label={`${m.custom ? "Remove" : "Disable"} ${m.id}`} title={m.custom ? "Remove custom model" : "Disable"}>{m.custom ? <Trash2 className="size-4" /> : <X className="size-4" />}</button>

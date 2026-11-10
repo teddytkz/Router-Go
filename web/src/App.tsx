@@ -6,6 +6,7 @@ import Combos from "./pages/Combos";
 import ApiKeys from "./pages/ApiKeys";
 import OAuthCallback from "./pages/OAuthCallback";
 import Login from "./pages/Login";
+import ModelBudgeting from "./pages/ModelBudgeting";
 import Models from "./pages/Models";
 import Dashboard from "./pages/Dashboard";
 import ProviderDetail from "./pages/ProviderDetail";
@@ -37,7 +38,9 @@ export default function App() {
         <Route path="console-log" element={<ConsoleLog />} />
         <Route path="usage" element={<Usage />} />
         <Route path="proxy-pools" element={<ProxyPools />} />
-        <Route path="quota" element={<Quota />} />
+        <Route path="quota-tracker" element={<Quota />} />
+        <Route path="quota" element={<Navigate to="/dashboard/quota-tracker" replace />} />
+        <Route path="model-budgeting" element={<ModelBudgeting />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

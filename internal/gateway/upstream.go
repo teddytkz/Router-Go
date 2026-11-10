@@ -16,6 +16,7 @@ import (
 
 	"router-go/internal/config"
 	"router-go/internal/db"
+	"router-go/internal/provider"
 )
 
 func newClient(store *db.Store) *http.Client {
@@ -66,6 +67,8 @@ type ValidateResult struct {
 	Error  string   `json:"error,omitempty"`
 	Method string   `json:"method,omitempty"`
 	Models []string `json:"models,omitempty"`
+	// Rejected: the upstream answered 401/403, i.e. the key itself is bad (as opposed to an outage or a quota problem).
+	Rejected bool `json:"-"`
 }
 
 // Validate checks a base URL + key: GET /models first, then (when modelId is given) a 1-token probe.
@@ -281,8 +284,19 @@ func (g *Gateway) ValidateBuiltin(ctx context.Context, node *db.Node, key string
 	if !p.Routable() {
 		return ValidateResult{Error: p.Name + " cannot be used yet: " + p.Note}
 	}
+	if p.Category == provider.CategoryAPIKey && p.Native == nil { // a plain key provider: GET /models proves the key without spending credit
+		ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+		defer cancel()
+		models, status, err := g.listModels(ctx, g.clientFor(node), node.BaseURL(), key, false)
+		switch {
+		case err == nil:
+			return ValidateResult{Valid: true, Method: "models", Models: models}
+		case status == 401 || status == 403:
+			return ValidateResult{Error: "API key unauthorized", Method: "models", Rejected: true}
+		}
+	}
 	if _, err := g.ProbeModel(ctx, node, key, p.Models[0].ID); err != nil {
-		return ValidateResult{Error: err.Error(), Method: "chat"}
+		return ValidateResult{Error: err.Error(), Method: "chat", Rejected: strings.HasPrefix(err.Error(), "HTTP 401") || strings.HasPrefix(err.Error(), "HTTP 403")}
 	}
 	return ValidateResult{Valid: true, Method: "chat"}
 }

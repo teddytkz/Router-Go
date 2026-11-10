@@ -1207,14 +1207,14 @@ func TestBuiltinProviders(t *testing.T) {
 		return resp.StatusCode, out
 	}
 
-	// the registry lists the five providers and how far each port goes
+	// the registry lists the seven providers and how far each port goes
 	_, out := call("GET", "/api/builtin-providers", "")
 	status := map[string]string{}
 	for _, p := range out["providers"].([]any) {
 		pm := p.(map[string]any)
 		status[pm["id"].(string)] = pm["status"].(string)
 	}
-	if len(status) != 6 || status["kiro"] != "experimental" || status["cline"] != "ready" || status["qoder"] != "experimental" || status["opencode"] != "experimental" {
+	if len(status) != 7 || status["tokenharbor"] != "ready" || status["kiro"] != "experimental" || status["cline"] != "ready" || status["qoder"] != "experimental" || status["opencode"] != "experimental" {
 		t.Fatalf("registry = %v", status)
 	}
 	// a custom node cannot take a reserved alias

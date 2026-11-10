@@ -1,11 +1,8 @@
 package api
 
 import (
-	"cmp"
 	"context"
 	"net/http"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -74,61 +71,4 @@ func (a *API) connectionUsage(w http.ResponseWriter, r *http.Request) {
 		a.usages.Store(c.ID, usageEntry{time.Now(), token, u})
 	}
 	writeJSON(w, 200, u)
-}
-
-// freeRank orders the free-tier rows by how the allowance renews; unknown cadences come last.
-var freeRank = []string{"daily", "weekly", "monthly", "rolling", "one-time"}
-
-type freeTier struct {
-	ProviderID    string  `json:"providerId"`
-	ProviderName  string  `json:"providerName"`
-	ProviderAlias string  `json:"providerAlias"`
-	FreeRefresh   *string `json:"freeRefresh"`
-	ModelID       *string `json:"modelId"`
-	ModelName     *string `json:"modelName"`
-}
-
-// freeTiers: GET /api/free-tiers, the catalogue of free allowances (XRouter-Next's listFreeTiers, restricted to the
-// built-in providers). A provider with free access has one row carrying its renewal cadence; its models get their own
-// rows only when the provider is free by nature (category "free"), never for paid models of a mixed provider.
-func (a *API) freeTiers(w http.ResponseWriter, _ *http.Request) {
-	rows := []freeTier{}
-	for _, p := range provider.All() {
-		if !p.Routable() { // an unsupported provider has a free tier upstream but this port cannot serve it
-			continue
-		}
-		if p.Category != provider.CategoryFree && p.FreeRefresh == "" {
-			continue
-		}
-		var cadence *string
-		if p.FreeRefresh != "" {
-			cadence = &p.FreeRefresh
-		}
-		base := freeTier{ProviderID: p.ID, ProviderName: p.Name, ProviderAlias: p.Alias, FreeRefresh: cadence}
-		rows = append(rows, base)
-		if p.Category != provider.CategoryFree {
-			continue
-		}
-		for _, m := range p.Models {
-			row := base
-			row.ModelID, row.ModelName = &m.ID, &m.Name
-			rows = append(rows, row)
-		}
-	}
-	rank := func(t freeTier) int {
-		if t.FreeRefresh == nil {
-			return len(freeRank)
-		}
-		return slices.Index(freeRank, *t.FreeRefresh)
-	}
-	model := func(t freeTier) string { // the provider row sorts before its models
-		if t.ModelID == nil {
-			return ""
-		}
-		return strings.ToLower(*t.ModelID)
-	}
-	slices.SortStableFunc(rows, func(x, y freeTier) int {
-		return cmp.Or(rank(x)-rank(y), strings.Compare(strings.ToLower(x.ProviderName), strings.ToLower(y.ProviderName)), strings.Compare(model(x), model(y)))
-	})
-	writeJSON(w, 200, map[string]any{"tiers": rows})
 }
