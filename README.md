@@ -4,7 +4,7 @@ An AI gateway with a web dashboard, shipped as a single Go binary (the React das
 
 Rewritten from XRouter-Next in Go. The database schema is the same as XRouter-Next.
 
-More docs: [`docs/PRD.md`](docs/PRD.md) · [`docs/PORTING_CHECKLIST.md`](docs/PORTING_CHECKLIST.md)
+More docs: [`docs/PRD.md`](docs/PRD.md) · [`docs/PORTING_CHECKLIST.md`](docs/PORTING_CHECKLIST.md) · contributor and porting workflow: [`CLAUDE.md`](CLAUDE.md)
 
 ## Features
 
@@ -28,6 +28,7 @@ More docs: [`docs/PRD.md`](docs/PRD.md) · [`docs/PORTING_CHECKLIST.md`](docs/PO
 | CodeBuddy | `cbai` | OAuth | tested against mocks only |
 | Qoder | `qd` | Personal Access Token (`pt-…`) | tested against mocks only |
 | Kiro | `kr` | OAuth (AWS Builder ID), or paste a refresh token / JSON | experimental |
+| Token Harbor | `th` | API key (`thk_live_…`) | ready; key check proven against the real service, a valid key not yet |
 
 *Experimental* providers may be rejected by the upstream at any time. Each provider lives in `internal/provider/<name>` and registers itself with `provider.Register`.
 
