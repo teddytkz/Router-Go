@@ -1,14 +1,14 @@
 import { Server } from "lucide-react";
 import { Badge, Card, cn, EmptyState, Skeleton } from "../ui";
 import type { UsageSummary } from "../../lib/api";
-import { useActiveRequests, useNodes } from "../../lib/hooks";
+import { useActiveRequests, useAllNodes } from "../../lib/hooks";
 import { useNow } from "./shared";
 
 const IDLE_MS = 24 * 60 * 60 * 1000;
 
 /** Every provider with the models it served in the last 24h; models being served right now glow green. */
 export function ProviderActivity({ data }: { data: UsageSummary | undefined }) {
-  const nodes = useNodes();
+  const nodes = useAllNodes();
   const active = useActiveRequests();
   const now = useNow(30_000);
   const loading = nodes.isLoading || !data;

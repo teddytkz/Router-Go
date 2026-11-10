@@ -1,7 +1,7 @@
 import { AudioLines, Eye, type LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { CapacityAdapter as Adapter, CapacityPool } from "../lib/api";
-import { useCustomModels, useNodes, useSettings, useUpdateSettings } from "../lib/hooks";
+import { useCustomModels, useAllNodes, useSettings, useUpdateSettings } from "../lib/hooks";
 import { ComboMembers } from "./ComboMembers";
 import { ModelPicker, type PickGroup } from "./ModelPicker";
 import { Button, Card, errText, Modal, Switch, useToast } from "./ui";
@@ -18,7 +18,7 @@ const norm = (p?: CapacityPool): CapacityPool => ({ enabled: p?.enabled !== fals
 /** Fallback pools for requests that carry images/audio when no model of the requested combo can read them. */
 export function CapacityAdapter() {
   const toast = useToast(), settings = useSettings(), save = useUpdateSettings();
-  const custom = useCustomModels(), nodes = useNodes();
+  const custom = useCustomModels(), nodes = useAllNodes();
   const [pending, setPending] = useState<Adapter | null>(null); // shown until the server confirms, so toggles feel instant
   const [picking, setPicking] = useState<Key | null>(null), [draft, setDraft] = useState<string[]>([]), [showAll, setShowAll] = useState(false);
 

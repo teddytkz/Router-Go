@@ -2,13 +2,13 @@ import { Boxes, Pencil, Plus, Tag, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import { Badge, Button, Card, ConfirmModal, EmptyState, errText, Field, Input, Modal, PageHeader, Select, Skeleton, useToast } from "../components/ui";
 import type { CustomModel } from "../lib/api";
-import { useAddCustomModel, useAliases, useAllModels, useCustomModels, useDeleteAlias, useDeleteCustomModel, useNodes, useSetAlias } from "../lib/hooks";
+import { useAddCustomModel, useAliases, useAllModels, useCustomModels, useDeleteAlias, useDeleteCustomModel, useNodes, useAllNodes, useSetAlias } from "../lib/hooks";
 
 const th = "text-left text-xs font-medium text-muted px-4 py-2";
 
 // ---------- aliases ----------
 function AliasModal({ alias, model, onClose }: { alias?: string; model?: string; onClose: () => void }) {
-  const toast = useToast(), set = useSetAlias(), nodes = useNodes(), models = useAllModels(nodes.data), listId = useId();
+  const toast = useToast(), set = useSetAlias(), nodes = useAllNodes(), models = useAllModels(nodes.data), listId = useId();
   const [a, setA] = useState(alias ?? ""), [m, setM] = useState(model ?? "");
   const submit = () => set.mutate({ alias: a.trim(), model: m.trim() }, { onSuccess: () => { toast("ok", "Alias saved"); onClose(); }, onError: (e) => toast("err", errText(e)) });
   return (

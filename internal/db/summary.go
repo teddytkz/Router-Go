@@ -3,6 +3,8 @@ package db
 import (
 	"database/sql"
 	"time"
+
+	"router-go/internal/provider"
 )
 
 // Periods understood by Summary (same set as XRouter-Next's usage page).
@@ -143,6 +145,11 @@ func (s *Store) Summary(period string) (*Summary, error) {
 	}
 
 	nodeNames := s.names(`SELECT id,name FROM providerNodes`)
+	for _, p := range provider.All() { // built-ins are not stored in providerNodes
+		if _, ok := nodeNames[p.ID]; !ok {
+			nodeNames[p.ID] = p.Name
+		}
+	}
 	connNames := s.names(`SELECT id,name FROM providerConnections`)
 	keyNames := map[string]string{}
 	if keys, err := s.APIKeys(); err == nil {

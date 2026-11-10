@@ -6,7 +6,7 @@ import { ComboMembers } from "../components/ComboMembers";
 import { ModelPicker, type PickGroup } from "../components/ModelPicker";
 import { Badge, Button, Card, ConfirmModal, EmptyState, errText, Field, Input, Modal, PageHeader, Select, Skeleton, useToast } from "../components/ui";
 import type { Combo, ComboStrategy } from "../lib/api";
-import { useAliases, useAllModels, useCapsMap, useCombos, useDeleteCombo, useNodes, useSaveCombo } from "../lib/hooks";
+import { useAliases, useAllModels, useCapsMap, useCombos, useAllNodes, useDeleteCombo, useSaveCombo } from "../lib/hooks";
 
 const NAME_RE = /^[A-Za-z0-9_.-]{1,64}$/;
 const STRATEGY: Record<ComboStrategy, { label: string; hint: string }> = {
@@ -16,7 +16,7 @@ const STRATEGY: Record<ComboStrategy, { label: string; hint: string }> = {
 
 function ComboModal({ combo, onClose }: { combo?: Combo; onClose: () => void }) {
   const toast = useToast(), save = useSaveCombo();
-  const nodes = useNodes(), models = useAllModels(nodes.data), aliases = useAliases();
+  const nodes = useAllNodes(), models = useAllModels(nodes.data), aliases = useAliases();
   const [name, setName] = useState(combo?.name ?? ""), [strategy, setStrategy] = useState<ComboStrategy>(combo?.strategy ?? "fallback"), [members, setMembers] = useState(combo?.models ?? []);
   const [picking, setPicking] = useState(false), [draft, setDraft] = useState<string[]>([]);
   const nameErr = name && !NAME_RE.test(name) ? "Use 1-64 letters, digits, dot, dash or underscore" : undefined;

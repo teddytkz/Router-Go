@@ -1,7 +1,7 @@
 import { Check, RefreshCw, ScrollText, X } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, cn, EmptyState, fmtTime, Input, Select, Skeleton, Switch } from "../ui";
-import { useConnections, useHistory, useNodes } from "../../lib/hooks";
+import { useAllNodes, useConnections, useHistory } from "../../lib/hooks";
 import { fmtFull } from "./shared";
 
 const LIMIT = 200;
@@ -10,7 +10,7 @@ const STATUS = { ok: ["OK", "text-ok"], error: ["FAILED", "text-err"], canceled:
 export function RequestLogs() {
   const [auto, setAuto] = useState(true), [q, setQ] = useState(""), [status, setStatus] = useState("");
   const hist = useHistory({ limit: LIMIT, offset: 0, provider: "", model: "", status }, auto ? 3000 : false);
-  const nodes = useNodes(), conns = useConnections();
+  const nodes = useAllNodes(), conns = useConnections();
   const nodeName = (id: string) => nodes.data?.find((n) => n.id === id)?.name ?? id;
   const connName = (id?: string) => (id ? conns.data?.find((c) => c.id === id)?.name ?? id.slice(0, 8) : "—");
   const all = hist.data?.rows ?? [];

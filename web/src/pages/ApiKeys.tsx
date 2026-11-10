@@ -3,11 +3,11 @@ import { useState } from "react";
 import { Badge, Button, Card, ConfirmModal, CopyButton, EmptyState, errText, fmtTime, Input, Modal, PageHeader, Skeleton, Switch, useToast, Field } from "../components/ui";
 import { ModelListEditor } from "../components/ModelListEditor";
 import type { ApiKey } from "../lib/api";
-import { useAliases, useAllModels, useCombos, useCreateKey, useDeleteKey, useKeys, useNodes, useToggleKey, useUpdateKeyAccess } from "../lib/hooks";
+import { useAliases, useAllModels, useCombos, useCreateKey, useDeleteKey, useKeys, useNodes, useAllNodes, useToggleKey, useUpdateKeyAccess } from "../lib/hooks";
 
 function AccessModal({ k, onClose }: { k: ApiKey; onClose: () => void }) {
   const toast = useToast(), save = useUpdateKeyAccess();
-  const nodes = useNodes(), models = useAllModels(nodes.data), combos = useCombos(), aliases = useAliases();
+  const nodes = useAllNodes(), models = useAllModels(nodes.data), combos = useCombos(), aliases = useAliases();
   const [restricted, setRestricted] = useState(k.access?.restricted ?? false), [allow, setAllow] = useState(k.access?.allow ?? []);
   const options = [...(combos.data?.map((c) => c.name) ?? []), ...Object.keys(aliases.data ?? {}), ...(models.data ?? [])];
   return (

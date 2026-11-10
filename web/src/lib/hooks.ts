@@ -7,6 +7,20 @@ export const useAuthStatus = () => useQuery({ queryKey: ["auth"], queryFn: () =>
 export const useSettings = () => useQuery({ queryKey: ["settings"], queryFn: () => api<Settings>("/api/settings") });
 export const useKeys = () => useQuery({ queryKey: ["keys"], queryFn: () => api<{ keys: ApiKey[] }>("/api/keys").then((r) => r.keys) });
 export const useNodes = () => useQuery({ queryKey: ["nodes"], queryFn: () => api<{ nodes: ProviderNode[] }>("/api/provider-nodes").then((r) => r.nodes) });
+/**
+ * Custom nodes plus the built-in providers a request can reach (no key needed, or at least one connection).
+ * /api/provider-nodes only lists custom nodes, so pickers and usage views use this to include Cline, CodeBuddy, OpenCode Free, Freebuff, ….
+ */
+export type RouteNode = Pick<ProviderNode, "id" | "name" | "prefix">;
+export function useAllNodes() {
+  const n = useNodes(), b = useBuiltinProviders(), c = useConnections();
+  const data = useMemo<RouteNode[] | undefined>(() => {
+    if (!n.data) return undefined;
+    const keyed = new Set((c.data ?? []).map((x) => x.provider));
+    return [...n.data, ...(b.data ?? []).filter((p) => p.noAuth || keyed.has(p.id)).map((p) => ({ id: p.id, name: p.name, prefix: p.alias }))];
+  }, [n.data, b.data, c.data]);
+  return { data, isLoading: n.isLoading || b.isLoading || c.isLoading };
+}
 export const useNode = (id?: string) => { const q = useNodes(); return { ...q, data: q.data?.find((n) => n.id === id) }; };
 export const useBuiltinProviders = () => useQuery({ queryKey: ["builtinProviders"], queryFn: () => api<{ providers: BuiltinProvider[] }>("/api/builtin-providers").then((r) => r.providers), staleTime: 60_000 });
 /** Resolves a provider id to a built-in registry entry or a custom node. */
@@ -22,7 +36,7 @@ export const useConnections = () => useQuery({ queryKey: ["connections"], queryF
 export const useStats = (hours = 24) => useQuery({ queryKey: ["usage", "stats", hours], queryFn: () => api<Stats>(`/api/usage/stats?hours=${hours}`), refetchInterval: 15_000 });
 export const useNodeModels = (id: string | null) =>
   useQuery({ queryKey: ["models", id], enabled: !!id, queryFn: () => api<NodeModels>(`/api/provider-nodes/${id}/models`) });
-export const useAllModels = (nodes: ProviderNode[] | undefined) =>
+export const useAllModels = (nodes: RouteNode[] | undefined) =>
   useQuery({
     queryKey: ["models", "all", nodes?.map((n) => n.id).join(",")],
     enabled: !!nodes?.length,
