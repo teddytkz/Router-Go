@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -52,5 +54,61 @@ func TestAddKeyIsCheckedAndConnected(t *testing.T) {
 		if c, _ := out["connection"].(map[string]any); c["testStatus"] != want {
 			t.Errorf("custom node key %q: testStatus = %v, want %s", key, c["testStatus"], want)
 		}
+	}
+}
+
+// A model test and a key test are upstream calls like any other: they appear in the usage history, with the endpoint
+// that tells them apart from gateway traffic, and the tokens the probe answer reported. A cached repeat is not a call.
+func TestDashboardTestsAreRecordedInUsage(t *testing.T) {
+	e := newEnv(t, func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/models") {
+			w.Write([]byte(`{"data":[{"id":"m"}]}`))
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"p\"}}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":1}}\n\ndata: [DONE]\n"))
+	}, "chat")
+	c := e.addKey("one", "k1")
+	e.store.UpdateSettings(map[string]any{"requireLogin": false})
+
+	e.json("POST", "/api/models/test", `{"model":"mock/m"}`)
+	e.json("POST", "/api/models/test", `{"model":"mock/m"}`) // answered from the 10 s cache: no upstream call, no row
+	e.json("POST", "/api/providers/"+c.ID+"/test", `{}`)
+
+	rows, _, err := e.store.History(10, 0, "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, r := range rows {
+		if r.Provider != e.node.ID || r.ConnectionID != c.ID {
+			t.Errorf("row not attributed to the tested connection: %+v", r)
+		}
+		got[r.Endpoint] = fmt.Sprintf("%s %s %d/%d", r.Model, r.Status, r.PromptTokens, r.CompletionTokens)
+	}
+	// the key test only lists models, so it has no tokens; the model test carries the probe's usage
+	if len(rows) != 2 || got["/dashboard/test-model"] != "mock/m ok 9/1" || got["/dashboard/test-key"] != "mock/(list models) ok 0/0" {
+		t.Errorf("usage rows = %d %v", len(rows), got)
+	}
+}
+
+// A strict upstream that rejects stream_options still passes the model test: it is asked again without the option.
+func TestModelTestRetriesWithoutStreamOptions(t *testing.T) {
+	var asked []bool
+	e := newEnv(t, func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		json.NewDecoder(r.Body).Decode(&body)
+		_, has := body["stream_options"]
+		asked = append(asked, has)
+		if has {
+			w.WriteHeader(400)
+			w.Write([]byte(`{"error":{"message":"Unknown parameter: stream_options"}}`))
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"p\"}}]}\n\ndata: [DONE]\n"))
+	}, "chat")
+	e.addKey("one", "k1")
+	e.store.UpdateSettings(map[string]any{"requireLogin": false})
+	if _, out := e.json("POST", "/api/models/test", `{"model":"mock/m"}`); out["ok"] != true || len(asked) != 2 || !asked[0] || asked[1] {
+		t.Errorf("out=%v asked=%v", out, asked)
 	}
 }

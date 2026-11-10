@@ -694,11 +694,12 @@ func TestModelTestAndRoutingHealth(t *testing.T) {
 
 	e.chat(`{"model":"mock/fine","messages":[]}`, e.apiKey)
 	e.chat(`{"model":"mock/broken","messages":[]}`, e.apiKey) // a 400 is a failed request but not a provider failure
+	// the two model tests above are recorded in usage too, so health sees 4 requests (2 ok, 2 failed)
 	h := call("GET", "/api/health/routing", "")["providers"].([]any)
 	if len(h) != 1 {
 		t.Fatalf("providers = %v", h)
 	}
-	if p := h[0].(map[string]any); p["circuit"] != "CLOSED" || p["requests"] != float64(2) || p["successRate"] != float64(50) || p["name"] != "Mock" {
+	if p := h[0].(map[string]any); p["circuit"] != "CLOSED" || p["requests"] != float64(4) || p["successRate"] != float64(50) || p["name"] != "Mock" {
 		t.Errorf("health = %v", p)
 	}
 }

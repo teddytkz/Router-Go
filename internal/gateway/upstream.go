@@ -69,6 +69,8 @@ type ValidateResult struct {
 	Models []string `json:"models,omitempty"`
 	// Rejected: the upstream answered 401/403, i.e. the key itself is bad (as opposed to an outage or a quota problem).
 	Rejected bool `json:"-"`
+	// Prompt/Completion: tokens a chat probe reported, for the usage history.
+	Prompt, Completion int `json:"-"`
 }
 
 // Validate checks a base URL + key: GET /models first, then (when modelId is given) a 1-token probe.
@@ -231,7 +233,7 @@ func probeRequest(anthropic bool, apiType, model string) (path string, body map[
 	case apiType == "responses":
 		return "/responses", map[string]any{"model": model, "input": "ping", "max_output_tokens": 16, "stream": true}
 	}
-	return "/chat/completions", map[string]any{"model": model, "max_tokens": 1, "stream": true, "messages": []any{map[string]any{"role": "user", "content": "ping"}}}
+	return "/chat/completions", map[string]any{"model": model, "max_tokens": 1, "stream": true, "stream_options": map[string]any{"include_usage": true}, "messages": []any{map[string]any{"role": "user", "content": "ping"}}}
 }
 
 const (
@@ -242,8 +244,56 @@ const (
 	localProbeTimeout = 180 * time.Second
 )
 
-// ProbeModel sends a one-token request for model through node with the given key and reports how long it took.
-func (g *Gateway) ProbeModel(ctx context.Context, node *db.Node, key, model string) (time.Duration, error) {
+// ProbeResult is what a one-token test call reports: how long it took and the tokens the upstream said it used
+// (0 when the answer carries no usage).
+type ProbeResult struct {
+	Latency            time.Duration
+	Prompt, Completion int
+}
+
+// probeUsage reads the token counts out of a probe answer: an SSE stream or a JSON body, in chat (prompt/completion),
+// messages (input/output, split over message_start and message_delta) or responses (response.usage) shape.
+func probeUsage(raw []byte) (prompt, completion int) {
+	take := func(u map[string]any) {
+		for _, k := range []string{"prompt_tokens", "input_tokens"} {
+			if v, ok := u[k].(float64); ok && int(v) > prompt {
+				prompt = int(v)
+			}
+		}
+		for _, k := range []string{"completion_tokens", "output_tokens"} {
+			if v, ok := u[k].(float64); ok && int(v) > completion {
+				completion = int(v)
+			}
+		}
+	}
+	scan := func(b []byte) {
+		var ev map[string]any
+		if json.Unmarshal(b, &ev) != nil {
+			return
+		}
+		if u, ok := ev["usage"].(map[string]any); ok {
+			take(u)
+		}
+		for _, k := range []string{"message", "response"} {
+			if sub, ok := ev[k].(map[string]any); ok {
+				if u, ok := sub["usage"].(map[string]any); ok {
+					take(u)
+				}
+			}
+		}
+	}
+	for _, line := range bytes.Split(raw, []byte("\n")) {
+		if data, ok := bytes.CutPrefix(bytes.TrimSpace(line), []byte("data:")); ok {
+			scan(bytes.TrimSpace(data))
+		}
+	}
+	scan(bytes.TrimSpace(raw)) // a non-streaming JSON answer
+	return prompt, completion
+}
+
+// ProbeModel sends a one-token request for model through node with the given key and reports how long it took and
+// the tokens it used.
+func (g *Gateway) ProbeModel(ctx context.Context, node *db.Node, key, model string) (ProbeResult, error) {
 	if p, ok := nativeOf(node); ok {
 		return g.probeNative(ctx, node, p, key, model)
 	}
@@ -255,23 +305,30 @@ func (g *Gateway) ProbeModel(ctx context.Context, node *db.Node, key, model stri
 	if fix := g.bodyFix(node, model); fix != nil && format == "chat" {
 		fix(body) // the same fix-ups as real requests, or a strict upstream would reject the probe
 	}
-	b, _ := json.Marshal(body)
-	req, _ := g.newReq(ctx, "POST", node.BaseURL()+path, key, b, true, anthropic)
-	g.nodeHeaders(req, node)
 	start := time.Now()
-	resp, err := g.clientFor(node).Do(req)
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			return 0, fmt.Errorf("no answer within %ds — the provider is not responding to chat requests", int(probeTimeout.Seconds()))
+	for attempt := 0; ; attempt++ {
+		b, _ := json.Marshal(body)
+		req, _ := g.newReq(ctx, "POST", node.BaseURL()+path, key, b, true, anthropic)
+		g.nodeHeaders(req, node)
+		resp, err := g.clientFor(node).Do(req)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return ProbeResult{}, fmt.Errorf("no answer within %ds — the provider is not responding to chat requests", int(probeTimeout.Seconds()))
+			}
+			return ProbeResult{}, errors.New(networkMessage(err))
 		}
-		return 0, errors.New(networkMessage(err))
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+		resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			if _, asked := body["stream_options"]; asked && attempt == 0 && bytes.Contains(raw, []byte("stream_options")) {
+				delete(body, "stream_options") // a strict upstream: ask again without the usage option, tokens stay 0
+				continue
+			}
+			return ProbeResult{}, fmt.Errorf("HTTP %d: %s", resp.StatusCode, errorMessage(raw, resp.StatusCode))
+		}
+		in, out := probeUsage(raw)
+		return ProbeResult{Latency: time.Since(start), Prompt: in, Completion: out}, nil
 	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-	if resp.StatusCode >= 400 {
-		return 0, fmt.Errorf("HTTP %d: %s", resp.StatusCode, errorMessage(raw, resp.StatusCode))
-	}
-	return time.Since(start), nil
 }
 
 // ValidateBuiltin checks a key for a built-in provider. Most of them have no usable GET /models, so the key is
@@ -295,8 +352,9 @@ func (g *Gateway) ValidateBuiltin(ctx context.Context, node *db.Node, key string
 			return ValidateResult{Error: "API key unauthorized", Method: "models", Rejected: true}
 		}
 	}
-	if _, err := g.ProbeModel(ctx, node, key, p.Models[0].ID); err != nil {
+	pr, err := g.ProbeModel(ctx, node, key, p.Models[0].ID)
+	if err != nil {
 		return ValidateResult{Error: err.Error(), Method: "chat", Rejected: strings.HasPrefix(err.Error(), "HTTP 401") || strings.HasPrefix(err.Error(), "HTTP 403")}
 	}
-	return ValidateResult{Valid: true, Method: "chat"}
+	return ValidateResult{Valid: true, Method: "chat", Prompt: pr.Prompt, Completion: pr.Completion}
 }

@@ -893,6 +893,17 @@ func (a *API) deleteConnection(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"success": true})
 }
 
+// recordTest writes a dashboard test (key test, model test) into the usage history like any other upstream call, so it
+// shows up under Usage and counts toward request budgets. Tokens are not read from the probe answer: they stay 0.
+// Tokens are whatever the probe answer reported (0 when the upstream sent no usage).
+func (a *API) recordTest(node *db.Node, c *db.Connection, model, endpoint string, ok bool, took time.Duration, prompt, completion int) {
+	status := "ok"
+	if !ok {
+		status = "error"
+	}
+	_ = a.Store.AddUsage(db.Usage{Endpoint: endpoint, Provider: node.ID, ConnectionID: c.ID, Model: node.Prefix() + "/" + model, Status: status, LatencyMs: int(took.Milliseconds()), PromptTokens: prompt, CompletionTokens: completion})
+}
+
 // testConnection validates the stored key and records the outcome (a success also lifts any cooldown).
 // runConnectionTest checks one key (GET /models, or a one-token probe when modelID is set), records the outcome on the
 // connection and reports how long it took.
@@ -919,6 +930,14 @@ func (a *API) runConnectionTest(ctx context.Context, c *db.Connection, node *db.
 		res = a.GW.Validate(ctx, node.Type, node.BaseURL(), node.APIType(), c.APIKey(), modelID)
 	}
 	took := time.Since(start)
+	tested := modelID // the model the probe called; a GET /models check has none
+	if p, ok := node.Builtin(); ok && res.Method == "chat" && len(p.Models) > 0 {
+		tested = p.Models[0].ID
+	}
+	if res.Method == "models" || tested == "" {
+		tested = "(list models)"
+	}
+	a.recordTest(node, c, tested, "/dashboard/test-key", res.Valid, took, res.Prompt, res.Completion)
 	if res.Valid {
 		a.Store.MarkConnection(c.ID, 0, "", 0, 0)
 	} else {
@@ -1141,14 +1160,16 @@ func (a *API) testModel(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 200, map[string]any{"ok": false, "error": kerr.Error()})
 			return
 		}
-		d, err := a.GW.ProbeModel(gateway.ConnCtx(r.Context(), c), node, key, model)
+		began := time.Now()
+		pr, err := a.GW.ProbeModel(gateway.ConnCtx(r.Context(), c), node, key, model)
+		a.recordTest(node, c, model, "/dashboard/test-model", err == nil, time.Since(began), pr.Prompt, pr.Completion)
 		if err != nil {
 			consolelog.Logf("WARN", "TEST", "%s/%s via %s: %s", prefix, model, c.Name, err)
 			reply(map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
-		consolelog.Logf("INFO", "TEST", "%s/%s via %s: OK in %dms", prefix, model, c.Name, d.Milliseconds())
-		reply(map[string]any{"ok": true, "latencyMs": d.Milliseconds()})
+		consolelog.Logf("INFO", "TEST", "%s/%s via %s: OK in %dms", prefix, model, c.Name, pr.Latency.Milliseconds())
+		reply(map[string]any{"ok": true, "latencyMs": pr.Latency.Milliseconds()})
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": false, "error": "no active connection to test with"})

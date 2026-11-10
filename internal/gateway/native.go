@@ -63,7 +63,7 @@ func (g *Gateway) nativeDo(ctx context.Context, node *db.Node, p provider.Provid
 
 // probeNative is ProbeModel for Native providers: a tiny real chat call through the provider's own request/response
 // code, read to the end so an error inside the stream counts too.
-func (g *Gateway) probeNative(ctx context.Context, node *db.Node, p provider.Provider, key, model string) (time.Duration, error) {
+func (g *Gateway) probeNative(ctx context.Context, node *db.Node, p provider.Provider, key, model string) (ProbeResult, error) {
 	budget := probeTimeout
 	if p.Native.Local != nil {
 		budget = localProbeTimeout
@@ -71,24 +71,26 @@ func (g *Gateway) probeNative(ctx context.Context, node *db.Node, p provider.Pro
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	_, body := probeRequest(false, "chat", model)
+	delete(body, "stream_options") // a Native provider speaks its own protocol; usage is read from the converted stream if it is there
 	b, _ := json.Marshal(body)
 	psd, _ := ctx.Value(psdKey{}).(map[string]any)
 	start := time.Now()
 	resp, err := g.nativeDo(ctx, node, p, psd, key, model, b, true)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return 0, fmt.Errorf("no answer within %ds — the provider is not responding to chat requests", int(budget.Seconds()))
+			return ProbeResult{}, fmt.Errorf("no answer within %ds — the provider is not responding to chat requests", int(budget.Seconds()))
 		}
-		return 0, errors.New(networkMessage(err))
+		return ProbeResult{}, errors.New(networkMessage(err))
 	}
 	defer resp.Body.Close()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
 	if resp.StatusCode >= 400 {
-		return 0, fmt.Errorf("HTTP %d: %s", resp.StatusCode, errorMessage(raw, resp.StatusCode))
+		return ProbeResult{}, fmt.Errorf("HTTP %d: %s", resp.StatusCode, errorMessage(raw, resp.StatusCode))
 	}
 	if _, inband, ok := bytes.Cut(raw, []byte(`data: {"error"`)); ok { // the converted stream reports failures as an SSE error event
 		line, _, _ := bytes.Cut(inband, []byte("\n"))
-		return 0, errors.New(errorMessage([]byte(`{"error"`+string(line)), 0))
+		return ProbeResult{}, errors.New(errorMessage([]byte(`{"error"`+string(line)), 0))
 	}
-	return time.Since(start), nil
+	in, out := probeUsage(raw)
+	return ProbeResult{Latency: time.Since(start), Prompt: in, Completion: out}, nil
 }

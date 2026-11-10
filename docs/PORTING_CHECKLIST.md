@@ -178,6 +178,7 @@ The "Phase" column refers to [`PRD.md`](./PRD.md) §4. **Last updated: 2026-11-0
 
 ## Supporting services (src/sse/services)
 - [x] Rationed tests: a test of the same key/model within 10 s is answered from memory; "Test all" skips experimental providers (CodeBuddy, Freebuff, OpenCode, ...) and they can only be tested one at a time — F2d _(the Freebuff test runs the real CLI, so testing one at a time is the only sensible way in)_
+- [x] Key tests and model tests are written to the usage history (endpoint `/dashboard/test-key` / `/dashboard/test-model`; tokens read from the probe answer, 0 when the upstream sends none, see PRD) — F3
 - [x] Background OAuth token refresh (every 5 minutes, for those expiring in < 30 minutes) — F4
 - [x] Empty-response failover in combo (200 with no text/tool-call → next member; content_filter/length are not retried; stream held until there is content, max 128 KB / 20 s) — F4
 - [x] Media passthrough endpoints: `/v1/images/generations`, `/v1/audio/speech`, `/v1/audio/transcriptions` (multipart), `/v1/videos/{generations,edits,extensions}` + polling `GET /v1/videos/{id}[/content]?model=` through an OpenAI-compatible node — F5 _(provider-specific adapters: ElevenLabs, fal, Stability, etc. are not ported)_
