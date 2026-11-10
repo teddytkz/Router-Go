@@ -95,7 +95,9 @@ export function BuiltinConnections({ p, conns, onAdd }: { p: BuiltinProvider; co
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border">
         <h2 className="font-semibold">Connections</h2>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <ApplyProxy conns={sorted} />
+          {!p.local && ( // a provider driven through a local program never goes through a proxy
+            <ApplyProxy conns={sorted} prepare={p.noAuth ? async () => [(await create.mutateAsync({ provider: p.id, name: "Default", apiKey: "" })).connection] : undefined} />
+          )}
           {sorted.length > 0 && <Button size="sm" disabled={running} loading={running} onClick={() => run(sorted)}>{!running && <Zap className="size-4" />}Test Connection One-by-One</Button>}
           <div className="flex items-center gap-2 text-[13px]">
             <span>Round Robin</span>

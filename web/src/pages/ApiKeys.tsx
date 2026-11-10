@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Badge, Button, Card, ConfirmModal, CopyButton, EmptyState, errText, fmtTime, Input, Modal, PageHeader, Skeleton, Switch, useToast, Field } from "../components/ui";
 import { ModelListEditor } from "../components/ModelListEditor";
 import type { ApiKey } from "../lib/api";
-import { useAliases, useAllModels, useCombos, useCreateKey, useDeleteKey, useKeys, useNodes, useAllNodes, useToggleKey, useUpdateKeyAccess } from "../lib/hooks";
+import { useAliases, useAllModels, useCombos, useCreateKey, useDeleteKey, useKeys, useNodes, useAllNodes, useSettings, useToggleKey, useUpdateKeyAccess, useUpdateSettings } from "../lib/hooks";
 
 function AccessModal({ k, onClose }: { k: ApiKey; onClose: () => void }) {
   const toast = useToast(), save = useUpdateKeyAccess();
@@ -56,7 +56,7 @@ function KeyRow({ k }: { k: ApiKey }) {
 }
 
 export default function ApiKeys() {
-  const keys = useKeys(), nodes = useNodes(), create = useCreateKey(), toast = useToast();
+  const keys = useKeys(), nodes = useNodes(), create = useCreateKey(), toast = useToast(), settings = useSettings(), updSettings = useUpdateSettings();
   const [adding, setAdding] = useState(false), [name, setName] = useState("");
   const base = `${location.origin}/v1`;
   const sample = nodes.data?.find((n) => n.apiType === "chat");
@@ -72,6 +72,11 @@ export default function ApiKeys() {
         <div className="text-[13px] text-muted mb-1.5">Base URL</div>
         <div className="flex items-center gap-1 rounded-lg bg-surface-2 pl-3"><code className="font-mono text-sm flex-1 truncate py-2">{base}</code><CopyButton value={base} label="Copy base URL" /></div>
         <div className="flex gap-1.5 mt-3 flex-wrap">{["/chat/completions", "/responses", "/messages", "/embeddings", "/models"].map((p) => <Badge key={p} className="font-mono">{p}</Badge>)}</div>
+      </Card>
+      <Card className="mb-4 flex items-center justify-between gap-6 px-4 py-4">
+        <div><div className="font-medium">Require API key</div><p className="text-muted text-[13px] mt-0.5 max-w-lg">Clients must send a valid gateway key to /v1. Disable only on a trusted network.</p></div>
+        <Switch checked={settings.data?.requireApiKey ?? true} label="Require API key" disabled={!settings.data || updSettings.isPending}
+          onChange={(v) => updSettings.mutate({ requireApiKey: v }, { onSuccess: () => toast("ok", "Saved"), onError: (e) => toast("err", errText(e)) })} />
       </Card>
       <Card className="mb-4">
         <div className="px-4 h-12 flex items-center border-b border-border"><h2 className="font-semibold">API keys</h2></div>

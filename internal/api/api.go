@@ -1214,7 +1214,7 @@ func (a *API) builtinView(p provider.Provider) map[string]any {
 	}
 	cfg := a.Store.ProviderConfig(p.ID)
 	return map[string]any{"id": p.ID, "alias": p.Alias, "name": p.Name, "category": p.Category, "status": p.Status, "note": p.Note,
-		"website": p.Website, "authHint": p.AuthHint, "noAuth": p.NoAuth, "passthrough": p.Passthrough, "baseUrl": p.BaseURL, "models": models,
+		"website": p.Website, "authHint": p.AuthHint, "noAuth": p.NoAuth, "passthrough": p.Passthrough, "local": p.Native != nil && p.Native.Local != nil, "baseUrl": p.BaseURL, "models": models,
 		"oauth": p.OAuth != nil, "oauthKind": oauthKind(p), "usage": p.Usage != nil,
 		"headers": map[string]any{"defaults": p.Headers, "custom": custom, "effective": effective, "customized": len(custom) > 0},
 		"config":  cfg}

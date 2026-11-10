@@ -59,9 +59,6 @@ export default function SettingsPage() {
         <Row title="Require login" body="Protect the dashboard with the password. Turning this off exposes the dashboard API to anyone who can reach this port.">
           <Switch checked={d.requireLogin} label="Require login" disabled={upd.isPending} onChange={(v) => set({ requireLogin: v }, "Saved")} />
         </Row>
-        <Row title="Require API key" body="Clients must send a valid gateway key to /v1. Disable only on a trusted network.">
-          <Switch checked={d.requireApiKey} label="Require API key" disabled={upd.isPending} onChange={(v) => set({ requireApiKey: v }, "Saved")} />
-        </Row>
       </Card>
       <PortCard d={d} />
       <Card className="p-4 mb-4">

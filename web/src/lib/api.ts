@@ -52,7 +52,7 @@ export type CustomModel = { providerAlias: string; id: string; type: string; nam
 export type BuiltinModel = { id: string; name: string; enabled: boolean; custom?: boolean; detected: Caps; effective: Caps; caps: ModelCapsOverride | null };
 export type BuiltinProvider = {
   id: string; alias: string; name: string; category: "oauth" | "free" | "apikey"; status: "ready" | "experimental" | "unsupported";
-  note: string; website: string; authHint: string; noAuth: boolean; passthrough: boolean; baseUrl: string; models: BuiltinModel[];
+  note: string; website: string; authHint: string; noAuth: boolean; passthrough: boolean; local?: boolean; baseUrl: string; models: BuiltinModel[];
   oauth: boolean; oauthKind: "code" | "poll" | "";
   usage?: boolean; // live account quota via GET /api/usage/{connectionId}
   config: { roundRobin: boolean; sticky: number };
