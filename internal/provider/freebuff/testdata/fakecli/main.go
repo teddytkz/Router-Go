@@ -80,10 +80,19 @@ func main() {
 		time.Sleep(200 * time.Millisecond)
 		turns = append(turns, map[string]any{"variant": "ai", "isComplete": false, "blocks": []any{}})
 		write(log, turns)
-		time.Sleep(400 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
+		// half the answer lands while the turn is still open, so a streaming caller has something to relay before the
+		// turn is complete
+		answer := "echo: " + prompt
+		turns[len(turns)-1] = map[string]any{"variant": "ai", "isComplete": false, "blocks": []any{
+			block("reasoning", "the caller must not see this"),
+			block("text", answer[:len(answer)/2]),
+		}}
+		write(log, turns)
+		time.Sleep(1200 * time.Millisecond)
 		turns[len(turns)-1] = map[string]any{"variant": "ai", "isComplete": true, "blocks": []any{
 			block("reasoning", "the caller must not see this"),
-			block("text", "echo: "+prompt),
+			block("text", answer),
 		}}
 		write(log, turns)
 		fmt.Println(idleMarker)

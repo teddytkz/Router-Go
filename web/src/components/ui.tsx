@@ -101,7 +101,7 @@ export const Skeleton = ({ className }: { className?: string }) => <div classNam
 
 export function EmptyState({ icon, title, body, action }: { icon: ReactNode; title: string; body?: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center text-center py-14 px-6">
+    <div className="flex flex-col items-start py-12 px-6">
       <div className="grid size-12 place-items-center rounded-xl bg-accent-soft text-accent mb-4">{icon}</div>
       <h3 className="font-semibold">{title}</h3>
       {body && <p className="text-muted mt-1 max-w-sm">{body}</p>}

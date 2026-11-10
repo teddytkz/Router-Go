@@ -41,14 +41,16 @@ function ResetModal({ onClose }: { onClose: () => void }) {
 
 function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
   return (
-    <Card className="p-4 text-center">
-      <div className="flex items-center justify-center gap-2 text-muted text-[13px]"><span style={{ color }}>{icon}</span>{label}</div>
+    <Card className="p-4">
+      <div className="flex items-center gap-2 text-muted text-[13px]"><span style={{ color }}>{icon}</span>{label}</div>
       <div className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">{value}</div>
     </Card>
   );
 }
 
 function Overview({ data, stale }: { data: UsageSummary | undefined; stale: boolean }) {
+  // the over-time chart always shows the last 24 hours, whatever the time period above is
+  const day = useUsageSummary("24h").data;
   return (
     <div className={cn("space-y-3 transition-opacity", stale && "opacity-60")} aria-busy={stale}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -63,7 +65,7 @@ function Overview({ data, stale }: { data: UsageSummary | undefined; stale: bool
         <div className="lg:col-span-2 min-w-0"><ProviderActivity data={data} /></div>
         <div className="min-w-0"><LivePanel data={data} /></div>
       </div>
-      {data ? <UsageChart data={data} /> : <Skeleton className="h-80" />}
+      {day ? <UsageChart data={day} /> : <Skeleton className="h-80" />}
       <BreakdownCharts rows={data?.breakdown} loading={!data} />
       {data ? <UsageTable rows={data.breakdown} /> : <Skeleton className="h-64" />}
     </div>

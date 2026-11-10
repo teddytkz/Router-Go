@@ -122,7 +122,7 @@ export function ModelsCard({ node }: { node: ProviderNode }) {
             {pending.length > 1 && <Button size="sm" onClick={addAll} loading={bulk}>{!bulk && <ListPlus className="size-4" />}Add all ({pending.length})</Button>}
           </div>
           {upstream.isLoading ? <Skeleton className="h-24" /> : !up.length ? (
-            <p className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-[13px] text-muted break-words">
+            <p className="rounded-lg border border-dashed border-border px-4 py-5 text-[13px] text-muted break-words">
               {upstream.data?.error ? `Could not list models: ${upstream.data.error}. ` : upstream.isError ? `Could not list models: ${errText(upstream.error)}. ` : "The provider reported no models. "}
               Add model IDs by hand above.
             </p>

@@ -36,7 +36,7 @@ function useTheme() {
 export function Logo() {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-[#8b6dff] to-[#5b3df5] text-white shadow-md">
+      <div className="grid size-8 place-items-center rounded-lg bg-gradient-to-br from-[#4f8cff] to-[#1d4ed8] text-white shadow-md">
         <svg viewBox="0 0 32 32" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M8 22V10h6.5a3.5 3.5 0 010 7H8m8 0l5 5" /></svg>
       </div>
       <span className="font-semibold tracking-tight text-[15px]">Router<span className="text-accent">-Go</span></span>
@@ -91,7 +91,7 @@ export default function Layout() {
           <Logo />
           <Button variant="ghost" size="sm" onClick={() => setOpen((o) => !o)} aria-label="Toggle menu">{open ? <X className="size-5" /> : <Menu className="size-5" />}</Button>
         </header>
-        <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8"><Outlet /></main>
+        <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8"><Outlet /></main>
       </div>
     </div>
   );

@@ -21,7 +21,7 @@ export function HealthTiles() {
   const count = (c: string) => all.filter((r) => r.circuit === c).length;
   const lat = all.map((r) => r.avgLatencyMs).filter((x): x is number => x != null);
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6" role="group" aria-label="Provider health">
+    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6 max-sm:[&>:last-child]:col-span-2" role="group" aria-label="Provider health">
       <Tile label="Total" value={all.length} />
       <Tile label="Healthy" value={count("CLOSED")} tone="ok" />
       <Tile label="Tripped" value={count("OPEN")} tone="err" />

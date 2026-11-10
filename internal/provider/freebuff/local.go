@@ -131,11 +131,37 @@ func local(ctx context.Context, call provider.NativeCall) (*http.Response, error
 	if o.configDir == "" {
 		o.configDir = defaultConfigDir(o.binary)
 	}
-	answer, err := clientFor(o).ask(ctx, call.Model, prompt)
-	if err != nil {
-		return nil, err
+	c := clientFor(o)
+	if !call.Stream {
+		answer, err := c.ask(ctx, call.Model, prompt)
+		if err != nil {
+			return nil, err
+		}
+		return chatResponse(call.Model, answer), nil
 	}
-	return chatResponse(call.Model, answer, call.Stream), nil
+	// A streaming caller gets the answer as the CLI writes it, but the first event still gates the response: an error
+	// before any text (no hours, a broken install) must leave this function as an error so the gateway can fall back,
+	// not as a 200 whose body is a complaint.
+	ctx, cancel := context.WithCancel(ctx)
+	ch := make(chan chunk, 64)
+	go func() {
+		defer close(ch)
+		_, err := c.askStream(ctx, call.Model, prompt, func(delta string) { ch <- chunk{delta: delta} })
+		if err != nil {
+			if ctx.Err() == nil { // a client that went away is not the provider's failure
+				ch <- chunk{err: err}
+			}
+		}
+	}()
+	first, ok := <-ch
+	if !ok {
+		return streamResponse(call.Model, "", nil, cancel), nil
+	}
+	if first.err != nil {
+		cancel()
+		return nil, first.err
+	}
+	return streamResponse(call.Model, first.delta, ch, cancel), nil
 }
 
 // defaultConfigDir is the profile the CLI keeps its login and chats in: the one beside the binary when it was
@@ -154,6 +180,16 @@ func defaultConfigDir(binary string) string {
 // ask runs one prompt through the CLI. A failure tears the process down instead of retrying, because a retry would
 // spend a second session window on a broken install.
 func (c *client) ask(ctx context.Context, model, prompt string) (string, error) {
+	return c.drive(ctx, model, prompt, nil)
+}
+
+// askStream is ask with the answer reported while it is written: emit receives each new piece of text as the CLI
+// appends it to its log, so a streaming caller sees the turn's first words long before the turn is complete.
+func (c *client) askStream(ctx context.Context, model, prompt string, emit func(string)) (string, error) {
+	return c.drive(ctx, model, prompt, emit)
+}
+
+func (c *client) drive(ctx context.Context, model, prompt string, emit func(string)) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -179,7 +215,7 @@ func (c *client) ask(ctx context.Context, model, prompt string) (string, error) 
 		c.reset()
 		return "", err
 	}
-	answer, err := c.awaitAnswer(ctx, base, baseCount, deadline)
+	answer, err := c.awaitAnswer(ctx, base, baseCount, deadline, emit)
 	if err != nil {
 		c.reset()
 		return "", err
@@ -191,8 +227,9 @@ func (c *client) ask(ctx context.Context, model, prompt string) (string, error) 
 // holds open (currentChatId only rotates on /new, project-files.ts), so progress is told apart from the previous
 // answer by the log growing — not by a new directory appearing. A prompt that never reached the CLI ends at the
 // deadline with the pane tail in the error, which is the diagnostic for that case.
-func (c *client) awaitAnswer(ctx context.Context, base string, baseCount int, deadline time.Time) (string, error) {
+func (c *client) awaitAnswer(ctx context.Context, base string, baseCount int, deadline time.Time, emit func(string)) (string, error) {
 	var tookOver time.Time
+	sent := 0 // characters of this turn's answer already handed to emit
 	for {
 		if err := ctx.Err(); err != nil {
 			return "", err
@@ -218,8 +255,16 @@ func (c *client) awaitAnswer(ctx context.Context, base string, baseCount int, de
 			}
 		}
 		if dir := c.newestChat(); dir != "" && (dir != base || messageCount(dir) > baseCount) {
-			if text, done := readAnswer(dir); done {
-				return text, nil
+			if text, done, ok := readText(dir); ok {
+				// The message is written long before it is complete, so hand out what has landed and keep the rest for
+				// the next poll: the client sees the answer grow instead of waiting the whole turn out.
+				if emit != nil && len(text) > sent {
+					emit(text[sent:])
+					sent = len(text)
+				}
+				if done {
+					return text, nil
+				}
 			}
 		}
 		time.Sleep(answerPollEvery)
@@ -292,12 +337,18 @@ func messageCount(dir string) int {
 // readAnswer reads the newest turn's answer, which is the log's last entry once it is finished. Only the last entry is
 // considered, so the previous turn's completed answer cannot be mistaken for this one. Reasoning blocks are skipped:
 // the CLI marks them as text blocks with textType "reasoning", and a caller wants the answer, not the chain of thought.
-// done is false while the turn is still streaming (or the file is mid-write); a turn that ran only tools settles with
-// an empty answer, which is done=true.
 func readAnswer(dir string) (string, bool) {
+	text, done, ok := readText(dir)
+	return text, ok && done
+}
+
+// readText is the answer so far. The CLI writes the turn's blocks while the model is still producing them, so the text
+// grows between polls: done says the log marked the turn complete, not that this text is final. ok is false while the
+// last entry is not an assistant turn (nothing to report yet).
+func readText(dir string) (text string, done bool, ok bool) {
 	raw, err := os.ReadFile(filepath.Join(dir, "chat-messages.json"))
 	if err != nil {
-		return "", false
+		return "", false, false
 	}
 	var msgs []struct {
 		Variant    string `json:"variant"`
@@ -309,11 +360,11 @@ func readAnswer(dir string) (string, bool) {
 		} `json:"blocks"`
 	}
 	if json.Unmarshal(raw, &msgs) != nil || len(msgs) == 0 {
-		return "", false
+		return "", false, false
 	}
 	m := msgs[len(msgs)-1]
-	if m.Variant != "ai" || !m.IsComplete {
-		return "", false
+	if m.Variant != "ai" {
+		return "", false, false
 	}
 	var b strings.Builder
 	for _, blk := range m.Blocks {
@@ -321,7 +372,7 @@ func readAnswer(dir string) (string, bool) {
 			b.WriteString(blk.Content)
 		}
 	}
-	return b.String(), true
+	return b.String(), m.IsComplete, true
 }
 
 // ---- process ----
@@ -594,35 +645,75 @@ func messageText(content any) string {
 	return ""
 }
 
-// chatResponse builds the chat-completions reply the gateway expects: SSE frames when the caller streams, one JSON
-// object otherwise. No usage block: the driver has no tokenizer, and a made-up count would be a lie.
-func chatResponse(model, text string, stream bool) *http.Response {
-	created := time.Now().Unix()
+// chunk is one event of a streamed turn: a piece of answer text, or the failure that ended the turn.
+type chunk struct {
+	delta string
+	err   error
+}
+
+// sseFrame renders one chat.completion.chunk event. No usage block: the driver has no tokenizer, and a made-up count
+// would be a lie.
+func sseFrame(id string, created int64, model string, delta map[string]any, finish any) []byte {
+	c := map[string]any{"id": id, "object": "chat.completion.chunk", "created": created, "model": model,
+		"choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": finish}}}
+	raw, _ := json.Marshal(c)
+	return []byte("data: " + string(raw) + "\n\n")
+}
+
+// streamResponse relays a turn as it is written: the role frame, one content frame per delta the driver hands out, then
+// the finish frame. first is the delta the caller already took off the channel (it gates the status); a nil ch streams
+// the empty answer of a turn that produced no text (tool-only, for instance). cancel stops the driver when the last
+// frame has left (or the client went away), so its poll loop does not keep reading a log nobody is waiting for.
+func streamResponse(model, first string, ch <-chan chunk, cancel context.CancelFunc) *http.Response {
+	pr, pw := io.Pipe()
 	id := "chatcmpl-" + uuid.NewString()
-	h := http.Header{"Content-Type": []string{"application/json"}}
-	if stream {
-		h.Set("Content-Type", "text/event-stream")
-		var b strings.Builder
-		frame := func(delta map[string]any, finish any) {
-			c := map[string]any{"id": id, "object": "chat.completion.chunk", "created": created, "model": model,
-				"choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": finish}}}
-			raw, _ := json.Marshal(c)
-			b.WriteString("data: ")
-			b.Write(raw)
-			b.WriteString("\n\n")
+	created := time.Now().Unix()
+	go func() {
+		defer cancel()
+		defer pw.Close()
+		write := func(b []byte) bool {
+			if _, err := pw.Write(b); err != nil { // the client went away: drain, the driver stops on the cancelled ctx
+				return false
+			}
+			return true
 		}
-		frame(map[string]any{"role": "assistant", "content": text}, nil)
-		frame(map[string]any{}, "stop")
-		b.WriteString("data: [DONE]\n\n")
-		return &http.Response{StatusCode: 200, Header: h, Body: io.NopCloser(strings.NewReader(b.String()))}
-	}
+		write(sseFrame(id, created, model, map[string]any{"role": "assistant"}, nil))
+		failed := false
+		if first != "" {
+			write(sseFrame(id, created, model, map[string]any{"content": first}, nil))
+		}
+		for c := range ch {
+			if c.err != nil {
+				failed = true
+				raw, _ := json.Marshal(map[string]any{"error": map[string]any{"message": c.err.Error(), "type": "provider_error"}})
+				write([]byte("data: " + string(raw) + "\n\n"))
+				continue
+			}
+			if !write(sseFrame(id, created, model, map[string]any{"content": c.delta}, nil)) {
+				for range ch { // drain so the driver's emit never blocks on a gone client
+				}
+				return
+			}
+		}
+		if !failed {
+			write(sseFrame(id, created, model, map[string]any{}, "stop"))
+		}
+		write([]byte("data: [DONE]\n\n"))
+	}()
+	return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: pr}
+}
+
+// chatResponse builds the chat-completions reply the gateway expects for a non-streaming caller: one JSON object.
+func chatResponse(model, text string) *http.Response {
+	created := time.Now().Unix()
 	body := map[string]any{
-		"id": id, "object": "chat.completion", "created": created, "model": model,
+		"id": "chatcmpl-" + uuid.NewString(), "object": "chat.completion", "created": created, "model": model,
 		"choices": []any{map[string]any{"index": 0, "finish_reason": "stop",
 			"message": map[string]any{"role": "assistant", "content": text}}},
 	}
 	raw, _ := json.Marshal(body)
-	return &http.Response{StatusCode: 200, Header: h, Body: io.NopCloser(strings.NewReader(string(raw)))}
+	return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"application/json"}},
+		Body: io.NopCloser(strings.NewReader(string(raw)))}
 }
 
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }

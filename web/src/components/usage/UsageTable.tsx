@@ -86,7 +86,7 @@ function TableBody({ view, rows }: { view: View; rows: UsageBreakdownRow[] }) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-[13px]">
+      <table className="w-full text-[13px] whitespace-nowrap">
         <thead>
           <tr className="text-left text-muted border-b border-border">
             {cols.map((c) => (
@@ -142,8 +142,8 @@ export function UsageTable({ rows }: { rows: UsageBreakdownRow[] }) {
   return (
     <Card className="overflow-hidden">
       <div className="flex items-center justify-between gap-3 p-4 border-b border-border">
-        <h2 className="font-semibold">Usage breakdown</h2>
-        <Select aria-label="Group usage by" className="w-52" value={view} onChange={(e) => setView(e.target.value as View)}>
+        <h2 className="font-semibold whitespace-nowrap shrink-0">Usage breakdown</h2>
+        <Select aria-label="Group usage by" className="w-52 min-w-0" value={view} onChange={(e) => setView(e.target.value as View)}>
           {Object.entries(VIEWS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </Select>
       </div>

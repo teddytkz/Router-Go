@@ -239,7 +239,7 @@ func TestSaveModelRefusesToDiscardUnreadableSettings(t *testing.T) {
 }
 
 func TestChatResponseShapes(t *testing.T) {
-	resp := chatResponse("m/x", "hello", false)
+	resp := chatResponse("m/x", "hello")
 	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
 		t.Errorf("content type %q", ct)
 	}
@@ -253,14 +253,50 @@ func TestChatResponseShapes(t *testing.T) {
 	if json.Unmarshal(raw, &body) != nil || body.Model != "m/x" || body.Choices[0].Message.Content != "hello" {
 		t.Errorf("body = %s", raw)
 	}
+}
 
-	stream := chatResponse("m/x", "hello", true)
+func TestStreamResponseRelaysEachDelta(t *testing.T) {
+	ch := make(chan chunk, 2)
+	ch <- chunk{delta: "lo"}
+	ch <- chunk{delta: " there"}
+	close(ch)
+	stream := streamResponse("m/x", "hel", ch, func() {})
 	if ct := stream.Header.Get("Content-Type"); ct != "text/event-stream" {
 		t.Errorf("stream content type %q", ct)
 	}
-	raw, _ = io.ReadAll(stream.Body)
-	if !strings.Contains(string(raw), `"content":"hello"`) || !strings.HasSuffix(string(raw), "data: [DONE]\n\n") {
+	raw, _ := io.ReadAll(stream.Body)
+	if !strings.Contains(string(raw), `"content":"hel"`) || !strings.Contains(string(raw), `"content":" there"`) {
 		t.Errorf("stream = %s", raw)
+	}
+	if !strings.Contains(string(raw), `"finish_reason":"stop"`) || !strings.HasSuffix(string(raw), "data: [DONE]\n\n") {
+		t.Errorf("stream = %s", raw)
+	}
+	// three separate content frames, not one assembled answer
+	if got := strings.Count(string(raw), "chat.completion.chunk"); got != 5 {
+		t.Errorf("frames = %d, want role + 3 content + finish before DONE: %s", got, raw)
+	}
+
+	// a turn that dies mid-answer reports the failure in-band instead of pretending it stopped cleanly
+	fail := make(chan chunk, 1)
+	fail <- chunk{err: io.ErrUnexpectedEOF}
+	close(fail)
+	raw, _ = io.ReadAll(streamResponse("m/x", "", fail, func() {}).Body)
+	if !strings.Contains(string(raw), `"error"`) || strings.Contains(string(raw), `"finish_reason":"stop"`) {
+		t.Errorf("failure stream = %s", raw)
+	}
+}
+
+// A turn's text is visible in the log before the CLI marks it complete, which is what lets a streaming caller see it grow.
+func TestReadTextReportsTheGrowingTurn(t *testing.T) {
+	dir := t.TempDir()
+	writeChat(t, dir, []any{ai(false, text("reasoning", "thinking"), text("text", "half an ans"))})
+	got, done, ok := readText(dir)
+	if !ok || done || got != "half an ans" {
+		t.Errorf("partial turn: %q done=%v ok=%v", got, done, ok)
+	}
+	writeChat(t, dir, []any{ai(true, text("reasoning", "thinking"), text("text", "half an answer"))})
+	if got, done, ok = readText(dir); !ok || !done || got != "half an answer" {
+		t.Errorf("finished turn: %q done=%v ok=%v", got, done, ok)
 	}
 }
 

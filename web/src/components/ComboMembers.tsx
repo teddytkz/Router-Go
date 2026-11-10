@@ -51,7 +51,7 @@ export function ComboMembers({ value, onChange, available, onPick, roundRobin, p
           {missing > 0 && <p className="text-xs text-warn">{missing} member{missing === 1 ? " is" : "s are"} not added to a provider yet and will be skipped.</p>}
         </>
       ) : (
-        <button type="button" onClick={onPick} className="w-full rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted hover:border-accent/60 hover:text-text cursor-pointer">
+        <button type="button" onClick={onPick} className="w-full rounded-lg border border-dashed border-border px-4 py-6 text-[13px] text-muted hover:border-accent/60 hover:text-text cursor-pointer">
           {pool ? "No models yet — click to add models to this pool" : "No models yet — click to choose which models this combo uses"}
         </button>
       )}

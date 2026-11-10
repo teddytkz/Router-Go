@@ -12,7 +12,12 @@ import { StatusLine, summarize } from "./shared";
 
 const TONE = { oauth: "var(--accent)", free: "var(--ok)", apikey: "var(--warn)" } as const;
 
+// Providers with a logo in public/providers/{id}.png (copied from XRouter-Next); every other provider keeps its initials.
+const LOGOS = new Set(["opencode", "freebuff", "codebuddy-intl", "qoder", "cline", "kiro"]);
+
 function Tile({ p, className = "size-10 text-sm" }: { p: BuiltinProvider; className?: string }) {
+  const [broken, setBroken] = useState(false);
+  if (LOGOS.has(p.id) && !broken) return <img src={`/providers/${p.id}.png`} alt="" aria-hidden onError={() => setBroken(true)} className={`shrink-0 rounded-xl object-cover ${className}`} />;
   const c = TONE[p.category];
   const style: CSSProperties = { color: c, background: `color-mix(in srgb, ${c} 16%, var(--surface))`, borderColor: `color-mix(in srgb, ${c} 30%, var(--surface))` };
   return <div aria-hidden style={style} className={`grid shrink-0 place-items-center rounded-xl border font-semibold ${className}`}>{p.name.slice(0, 2).toUpperCase()}</div>;

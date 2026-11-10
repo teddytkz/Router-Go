@@ -29,7 +29,7 @@ function Form({ p }: { p: BuiltinProvider }) {
   return (
     <div className="p-4 space-y-3">
       <p className="text-[13px] text-muted">Sent with every request to this provider. Credentials are managed by the API keys (Authorization is not editable). Some upstreams only accept their own clients; headers are sent exactly as written.</p>
-      {rows.length === 0 && <p className="rounded-lg border border-dashed border-border px-4 py-4 text-center text-[13px] text-muted">No custom headers.</p>}
+      {rows.length === 0 && <p className="rounded-lg border border-dashed border-border px-4 py-4 text-[13px] text-muted">No custom headers.</p>}
       <ul className="space-y-2">
         {rows.map((r) => {
           const custom = defaults[r.name.trim()] !== r.value;
