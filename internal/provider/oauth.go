@@ -12,7 +12,7 @@ import (
 // Browser sign-in for providers that offer it. Two shapes exist among the built-ins:
 //
 //	"code": the browser is sent to the provider, which redirects back to the dashboard with a code (Cline).
-//	"poll": the dashboard shows a login link and polls until the user has signed in (CodeBuddy, Freebuff).
+//	"poll": the dashboard shows a login link and polls until the user has signed in (CodeBuddy).
 //
 // The functions live in each provider's package (oauth.go) and talk to that provider only; the router stores the
 // resulting tokens on a connection, refreshes them before they expire and sends the access token as the key.

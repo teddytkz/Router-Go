@@ -28,6 +28,9 @@ func (g *Gateway) nativeDo(ctx context.Context, node *db.Node, p provider.Provid
 	if err := json.Unmarshal(payload, &body); err != nil {
 		return nil, err
 	}
+	if p.Native.Local != nil { // no HTTP at all: the provider reaches its upstream through a local program
+		return p.Native.Local(ctx, provider.NativeCall{Token: key, Data: psd, Model: model, Body: body, Stream: stream})
+	}
 	urls := p.Native.Endpoints(node.BaseURL(), psd)
 	client := g.clientFor(node)
 	for i, u := range urls {
@@ -61,7 +64,11 @@ func (g *Gateway) nativeDo(ctx context.Context, node *db.Node, p provider.Provid
 // probeNative is ProbeModel for Native providers: a tiny real chat call through the provider's own request/response
 // code, read to the end so an error inside the stream counts too.
 func (g *Gateway) probeNative(ctx context.Context, node *db.Node, p provider.Provider, key, model string) (time.Duration, error) {
-	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	budget := probeTimeout
+	if p.Native.Local != nil {
+		budget = localProbeTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	_, body := probeRequest(false, "chat", model)
 	b, _ := json.Marshal(body)
@@ -70,7 +77,7 @@ func (g *Gateway) probeNative(ctx context.Context, node *db.Node, p provider.Pro
 	resp, err := g.nativeDo(ctx, node, p, psd, key, model, b, true)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			return 0, fmt.Errorf("no answer within %ds — the provider is not responding to chat requests", int(probeTimeout.Seconds()))
+			return 0, fmt.Errorf("no answer within %ds — the provider is not responding to chat requests", int(budget.Seconds()))
 		}
 		return 0, errors.New(networkMessage(err))
 	}

@@ -231,7 +231,13 @@ func probeRequest(anthropic bool, apiType, model string) (path string, body map[
 	return "/chat/completions", map[string]any{"model": model, "max_tokens": 1, "stream": true, "messages": []any{map[string]any{"role": "user", "content": "ping"}}}
 }
 
-const probeTimeout = 20 * time.Second
+const (
+	probeTimeout = 20 * time.Second
+	// localProbeTimeout covers a provider whose upstream is a program on this machine (provider.Native.Local): the
+	// program starts, opens a session and answers in one turn, which on freebuff has taken two minutes for an answer
+	// a 20s probe would have reported as an unresponsive provider.
+	localProbeTimeout = 180 * time.Second
+)
 
 // ProbeModel sends a one-token request for model through node with the given key and reports how long it took.
 func (g *Gateway) ProbeModel(ctx context.Context, node *db.Node, key, model string) (time.Duration, error) {

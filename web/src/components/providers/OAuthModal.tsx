@@ -16,7 +16,7 @@ function codeFrom(text: string): string {
 /**
  * Browser sign-in. Each provider differs:
  *  - "code" (Cline): the provider's page redirects back to /oauth/callback with a code, which that page relays here.
- *  - "poll" (CodeBuddy, Freebuff): the provider shows its own confirmation page; we poll until it is done.
+ *  - "poll" (CodeBuddy): the provider shows its own confirmation page; we poll until it is done.
  */
 export function OAuthModal({ p, onClose }: { p: BuiltinProvider; onClose: () => void }) {
   const toast = useToast(), qc = useQueryClient();

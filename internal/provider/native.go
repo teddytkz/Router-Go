@@ -17,6 +17,10 @@ type Native struct {
 	// Response converts a 2xx upstream response into a chat-completions one: SSE chunks (with usage) when stream,
 	// one JSON object otherwise. It must not touch error statuses: those are handled by the gateway as they are.
 	Response func(resp *http.Response, model string, stream bool) (*http.Response, error)
+	// Local replaces the HTTP round trip for an upstream reachable only through its own program on this machine
+	// (freebuff drives the vendor's CLI). It returns a chat-completions response itself: SSE when call.Stream, one
+	// JSON object otherwise. Endpoints and Request are unused when it is set.
+	Local func(ctx context.Context, call NativeCall) (*http.Response, error)
 }
 
 type NativeCall struct {

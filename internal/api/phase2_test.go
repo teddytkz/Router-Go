@@ -11,7 +11,6 @@ import (
 	"net/http/httptest"
 	"router-go/internal/api"
 	"router-go/internal/config"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1525,11 +1524,11 @@ func TestBuiltinModelsHeadersAndRoundRobin(t *testing.T) {
 	}
 }
 
-// Browser sign-in differs per provider: Cline returns a code, CodeBuddy and Freebuff are polled.
+// Browser sign-in differs per provider: Cline returns a code, CodeBuddy is polled until the token arrives.
 func TestOAuthFlowsPerProvider(t *testing.T) {
 	var mu sync.Mutex
-	var chatAuth, chatReqID, freebuffFP string
-	var codebuddyPolls, freebuffPolls int
+	var chatAuth, chatReqID string
+	var codebuddyPolls int
 	refreshed := false
 	jwt := func(s string) string { return "eyJhbGciOi." + s + ".sig" }
 
@@ -1549,19 +1548,6 @@ func TestOAuthFlowsPerProvider(t *testing.T) {
 				return
 			}
 			io.WriteString(w, `{"code":0,"data":{"accessToken":"cb-access","refreshToken":"cb-refresh","expiresIn":3600}}`)
-		case r.URL.Path == "/api/auth/cli/code": // freebuff
-			var in map[string]any
-			json.NewDecoder(r.Body).Decode(&in)
-			freebuffFP, _ = in["fingerprintId"].(string)
-			io.WriteString(w, `{"fingerprintId":"`+freebuffFP+`","fingerprintHash":"h1","loginUrl":"https://freebuff.example/login?auth_code=abc","expiresAt":`+strconv.FormatInt(time.Now().Add(time.Hour).UnixMilli(), 10)+`}`)
-		case r.URL.Path == "/api/auth/cli/status":
-			freebuffPolls++
-			if freebuffPolls < 2 {
-				w.WriteHeader(401)
-				io.WriteString(w, `{"error":"Authentication failed"}`)
-				return
-			}
-			io.WriteString(w, `{"user":{"id":"u1","email":"me@fb.test","name":"Me","authToken":"fb-token"}}`)
 		case strings.HasSuffix(r.URL.Path, "/chat/completions"): // chat for both providers
 			chatAuth, chatReqID = r.Header.Get("Authorization"), r.Header.Get("X-Request-ID")
 			io.WriteString(w, `{"choices":[{"message":{"content":"ok"}}]}`)
@@ -1605,8 +1591,13 @@ func TestOAuthFlowsPerProvider(t *testing.T) {
 		pm := p.(map[string]any)
 		kinds[pm["id"].(string)], _ = pm["oauthKind"].(string)
 	}
-	if kinds["cline"] != "code" || kinds["codebuddy-intl"] != "poll" || kinds["freebuff"] != "poll" || kinds["opencode"] != "" || kinds["qoder"] != "" {
+	if kinds["cline"] != "code" || kinds["codebuddy-intl"] != "poll" || kinds["opencode"] != "" || kinds["qoder"] != "" {
 		t.Fatalf("oauth kinds = %v", kinds)
+	}
+	// freebuff is driven through the vendor's CLI, which holds the login itself: no dashboard sign-in, and a model is
+	// a launch setting on that CLI, so the registry must not advertise an oauth flow for it.
+	if kinds["freebuff"] != "" {
+		t.Errorf("freebuff oauth kind = %q, want none", kinds["freebuff"])
 	}
 	if st, _ := call("POST", "/api/oauth/opencode/start", `{}`); st != 400 {
 		t.Errorf("a provider without sign-in: %d", st)
@@ -1693,14 +1684,10 @@ func TestOAuthFlowsPerProvider(t *testing.T) {
 		t.Errorf("exchange on a poll provider: %d", st)
 	}
 
-	// ---- Freebuff: the port is fail-closed (the live backend refuses third-party clients and bills strikes), so
-	// every entry point refuses before any upstream call ----
+	// ---- Freebuff: reachable, but only through the vendor's own CLI, so it has no browser sign-in of its own ----
 	for _, route := range []string{"/api/oauth/freebuff/start", "/api/oauth/freebuff/poll", "/api/oauth/freebuff/exchange"} {
-		if st, body := call("POST", route, `{}`); st != 400 || !strings.Contains(fmt.Sprint(body["error"]), "cannot be used yet") {
-			t.Errorf("%s on the unsupported provider: %d %v", route, st, body)
+		if st, body := call("POST", route, `{}`); st != 400 || !strings.Contains(fmt.Sprint(body["error"]), "no browser sign-in") {
+			t.Errorf("%s on the CLI-driven provider: %d %v", route, st, body)
 		}
-	}
-	if st, body := call("POST", "/api/providers", `{"provider":"freebuff","apiKey":"fb-token"}`); st != 400 || !strings.Contains(fmt.Sprint(body["error"]), "cannot be used yet") {
-		t.Errorf("adding a freebuff key: %d %v", st, body)
 	}
 }

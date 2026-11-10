@@ -189,81 +189,17 @@ func TestKiroUsageRefreshesExpiredToken(t *testing.T) {
 	}
 }
 
-func TestFreebuffUsageIsReadOnlyAndRoutedThroughThePool(t *testing.T) {
-	session := `{"status":"none","accessTier":"limited","rateLimitsByModel":{
-	 "deepseek/deepseek-v4-flash":{"limit":10,"recentCount":1.3,"resetAt":"2030-01-02T00:00:00Z","period":"pacific_day"},
-	 "unknown/model":{"limit":5,"recentCount":0,"resetAt":null}}}`
-	var method, auth string
-	e, hits := usageEnv(t, "freebuff", "/api/v1", func(w http.ResponseWriter, r *http.Request) {
-		method, auth = r.Method, r.Header.Get("Authorization")
-		if method != "GET" || r.URL.Path != "/api/v1/freebuff/session" { // a POST would burn a session
-			w.WriteHeader(405)
-			return
-		}
-		io.WriteString(w, session)
-	})
+// Freebuff is driven through the vendor's own CLI, not an HTTP API, so it has no quota endpoint this port may call:
+// the session endpoint the CLI itself uses refuses a third-party client and bills strikes. The dashboard must say so
+// rather than invent a quota.
+func TestFreebuffReportsNoQuotaApi(t *testing.T) {
+	e := newEnv(t, func(http.ResponseWriter, *http.Request) {}, "chat")
+	e.store.UpdateSettings(map[string]any{"requireLogin": false})
 	c := e.providerConn("freebuff", "fb-token")
-	_, _, out := e.usage(c.ID, "")
-	if method != "GET" || auth != "Bearer fb-token" || out["plan"] != "Freebuff (Limited)" {
-		t.Fatalf("method %s auth %q out %v", method, auth, out)
+	status, _, out := e.usage(c.ID, "")
+	if status != 200 || out["message"] != "Usage API not implemented for freebuff" || len(out["quotas"].(map[string]any)) != 0 {
+		t.Errorf("status %d out %v", status, out)
 	}
-	q := quota(t, out, "deepseek/deepseek-v4-flash")
-	if q["used"] != 1.3 || q["total"] != 10.0 || q["resetAt"] != "2030-01-02T00:00:00.000Z" || q["recurring"] != true || q["displayName"] != "DeepSeek V4 Flash" {
-		t.Errorf("quota = %v", q)
-	}
-	if u := quota(t, out, "unknown/model"); u["resetAt"] != nil || u["displayName"] != nil {
-		t.Errorf("unknown model = %v", u)
-	}
-
-	// through the connection's proxy pool: the proxy sees the absolute URL of the (fake) provider host
-	var proxied string
-	px := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		proxied = r.URL.String()
-		io.WriteString(w, session)
-	}))
-	defer px.Close()
-	t.Cleanup(provider.Override("freebuff", "http://freebuff.invalid/api/v1"))
-	pool := &db.ProxyPool{Name: "px", Type: db.PoolHTTP, ProxyURL: px.URL}
-	e.store.CreateProxyPool(pool)
-	e.store.SetConnectionProxy(c.ID, pool.ID)
-	before := hits.Load()
-	if _, _, out := e.usage(c.ID, "?force=1"); proxied != "http://freebuff.invalid/api/v1/freebuff/session" || hits.Load() != before || out["plan"] == nil {
-		t.Errorf("proxy not used: proxied=%q out=%v", proxied, out)
-	}
-}
-
-func TestFreebuffUsageMessages(t *testing.T) {
-	for _, tc := range []struct {
-		status int
-		body   string
-		want   string
-		plan   string
-	}{
-		{401, ``, "invalid or expired", ""},
-		{403, `{"status":"banned"}`, "banned", ""},
-		{403, `{"status":"country_blocked"}`, "region", ""},
-		{403, `{"message":"nope"}`, "denied (403): nope", ""},
-		{404, ``, "No session quota", "Freebuff"},
-		{200, `{"status":"none"}`, "No session quota", "Freebuff"},
-		{500, ``, "error (500)", ""},
-	} {
-		e, _ := usageEnv(t, "freebuff", "/api/v1", func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(tc.status)
-			io.WriteString(w, tc.body)
-		})
-		c := e.providerConn("freebuff", "t")
-		status, _, out := e.usage(c.ID, "")
-		if msg, _ := out["message"].(string); status != 200 || !strings.Contains(msg, tc.want) || out["plan"] != nilIfEmpty(tc.plan) {
-			t.Errorf("%d %s: status %d out %v", tc.status, tc.body, status, out)
-		}
-	}
-}
-
-func nilIfEmpty(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }
 
 func TestCodeBuddyUsagePacks(t *testing.T) {
@@ -348,7 +284,7 @@ func TestBuiltinViewFlagsLiveQuotaProviders(t *testing.T) {
 			got[p["id"].(string)] = true
 		}
 	}
-	if len(got) != 3 || !got["kiro"] || !got["freebuff"] || !got["codebuddy-intl"] {
+	if len(got) != 2 || !got["kiro"] || !got["codebuddy-intl"] {
 		t.Errorf("providers with live quotas = %v", got)
 	}
 }
@@ -360,17 +296,21 @@ func TestFreeTiers(t *testing.T) {
 	rows, _ := out["tiers"].([]any)
 	kiro, _ := provider.ByID("kiro")
 	oc, _ := provider.ByID("opencode")
-	// freebuff's free tier exists upstream but the port is unsupported, so it is not offered
-	if want := 2 + len(kiro.Models) + len(oc.Models); len(rows) != want {
+	fb, _ := provider.ByID("freebuff")
+	if want := 2 + len(kiro.Models) + len(oc.Models) + 1 + len(fb.Models); len(rows) != want {
 		t.Fatalf("%d rows, want %d", len(rows), want)
 	}
 	row := func(i int) map[string]any { return rows[i].(map[string]any) }
-	// daily first: the provider row carries the cadence, then its models; unknown cadences come last, by provider name
-	if r := row(0); r["providerId"] != "opencode" || r["freeRefresh"] != "daily" || r["modelId"] != nil || r["modelName"] != nil {
+	// the two daily providers lead, by provider name ("Freebuff" before "OpenCode Free"); a provider row carries the
+	// cadence and no model, then its own models follow; unknown cadences sort after every known one
+	if r := row(0); r["providerId"] != "freebuff" || r["freeRefresh"] != "daily" || r["modelId"] != nil || r["modelName"] != nil {
 		t.Errorf("first row = %v", r)
 	}
-	if r := row(1); r["providerId"] != "opencode" || r["freeRefresh"] != "daily" || r["modelId"] == nil || r["modelName"] == nil {
+	if r := row(1); r["providerId"] != "freebuff" || r["freeRefresh"] != "daily" || r["modelId"] == nil || r["modelName"] == nil {
 		t.Errorf("second row = %v", r)
+	}
+	if r := row(1 + len(fb.Models)); r["providerId"] != "opencode" || r["freeRefresh"] != "daily" || r["modelId"] != nil {
+		t.Errorf("opencode provider row = %v", r)
 	}
 	// an unknown cadence sorts after every known one; the provider row comes before its models
 	found := false
@@ -389,7 +329,7 @@ func TestFreeTiers(t *testing.T) {
 	for i := range rows {
 		seen[row(i)["providerId"]] = true
 	}
-	if len(seen) != 2 || !seen["opencode"] { // paid providers (cline, codebuddy-intl, search) and the unsupported freebuff are no free tiers
+	if len(seen) != 3 || !seen["opencode"] || !seen["freebuff"] { // paid providers (cline, codebuddy-intl, search) are no free tiers
 		t.Errorf("providers = %v", seen)
 	}
 }
