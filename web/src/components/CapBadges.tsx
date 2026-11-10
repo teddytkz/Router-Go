@@ -10,10 +10,10 @@ export function parseTokens(s: string): number | null {
   return m ? Math.round(+m[1] * (m[2].toLowerCase() === "m" ? 1e6 : m[2] ? 1e3 : 1)) : null;
 }
 
-export const CAP_FLAGS: { key: "vision" | "reasoning" | "audioInput"; label: string; Icon: LucideIcon }[] = [
-  { key: "vision", label: "Vision", Icon: Eye },
-  { key: "reasoning", label: "Reasoning", Icon: Brain },
-  { key: "audioInput", label: "Audio input", Icon: AudioLines },
+export const CAP_FLAGS: { key: "vision" | "reasoning" | "audioInput"; label: string; Icon: LucideIcon; tone: string }[] = [
+  { key: "vision", label: "Vision", Icon: Eye, tone: "text-accent bg-accent-soft" },
+  { key: "reasoning", label: "Reasoning", Icon: Brain, tone: "text-warn bg-warn-soft" },
+  { key: "audioInput", label: "Audio input", Icon: AudioLines, tone: "text-ok bg-ok-soft" },
 ];
 
 const Dot = () => <span aria-hidden className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-warn" />;
@@ -30,10 +30,10 @@ export function CapBadges({ caps, detected, size = "sm", className }: { caps?: C
   const manual = (k: keyof Caps) => !!detected && detected[k] !== caps[k];
   return (
     <span className={cn("inline-flex items-center gap-1 shrink-0", className)}>
-      {on.map(({ key, label, Icon }) => {
+      {on.map(({ key, label, Icon, tone }) => {
         const t = manual(key) ? `${label} (set manually)` : label;
         return (
-          <span key={key} role="img" aria-label={t} title={t} className={cn("relative inline-grid place-items-center", xs ? "text-muted" : "size-5 rounded-md bg-accent-soft text-accent")}>
+          <span key={key} role="img" aria-label={t} title={t} className={cn("relative inline-grid place-items-center", tone, xs ? "size-6 rounded-md" : "size-5 rounded-md")}>
             <Icon className="size-3.5" aria-hidden />{manual(key) && <Dot />}
           </span>
         );

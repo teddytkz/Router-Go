@@ -1,4 +1,4 @@
-import { ExternalLink, Loader2 } from "lucide-react";
+import { Copy, ExternalLink, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { api, type BuiltinProvider } from "../../lib/api";
@@ -91,7 +91,14 @@ export function OAuthModal({ p, onClose }: { p: BuiltinProvider; onClose: () => 
             <Loader2 className="size-4 animate-spin text-accent shrink-0" aria-hidden />
             <span className="min-w-0">{start!.kind === "poll" ? "Waiting for you to confirm the sign-in…" : "Waiting for the login to finish…"} <span className="text-muted tabular-nums">expires in {mm}</span></span>
           </div>
-          <p className="text-[13px] text-muted">Nothing opened? <a className="text-accent hover:underline break-all" href={start!.authUrl} target="_blank" rel="noreferrer">Open the login page</a>.</p>
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-2/50 px-3 py-3">
+            <div className="min-w-0 flex-1 text-center">
+              <p className="text-xs text-muted mb-1">Login URL</p>
+              <p className="font-mono text-xs break-all select-all">{start!.authUrl}</p>
+            </div>
+            <Button size="sm" variant="ghost" aria-label="Copy login URL" onClick={() => navigator.clipboard.writeText(start!.authUrl).then(() => toast("ok", "Copied"), () => toast("err", "Copy failed"))}><Copy className="size-4" /></Button>
+            <a className="inline-flex items-center gap-1 text-[13px] font-medium text-muted hover:text-text rounded" href={start!.authUrl} target="_blank" rel="noreferrer"><ExternalLink className="size-4" aria-hidden />Open</a>
+          </div>
           {start!.kind === "code" && (
             <Field label="Or paste the code" hint="If this window does not continue by itself, copy the address of the page you land on (it contains ?code=…) and paste it here.">
               {(id) => <Input id={id} className="font-mono" value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="https://…/oauth/callback?code=…" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); exchange(codeFrom(paste)); } }} />}

@@ -35,6 +35,7 @@ function Row({ p, c, first, last, busy, run, checked, onCheck, onUp, onDown }: {
             {st === "cooling" && c.rateLimitedUntil && <CooldownTimer until={c.rateLimitedUntil} />}
             {run && <Badge tone={run.state === "success" ? "ok" : run.state === "failed" ? "err" : run.state === "testing" ? "accent" : "neutral"}><span title={run.error}>{run.state}</span></Badge>}
           </div>
+          {(c.apiKeyMasked || c.email || c.displayName) && <p className="mt-1 font-mono text-xs text-muted truncate" title="Key / account">{c.apiKeyMasked || c.email || c.displayName}</p>}
           {c.isActive && c.lastError && <p className="mt-1 max-w-full truncate text-xs text-err" title={c.lastError}>{c.lastError}</p>}
           {run?.state === "failed" && run.error && <p className="mt-1 max-w-full truncate text-xs text-err" title={run.error}>{run.error}</p>}
         </div>

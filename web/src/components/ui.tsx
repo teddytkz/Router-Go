@@ -40,7 +40,7 @@ export function Field({ label, hint, error, children }: { label: string; hint?: 
     <div className="space-y-1.5">
       <label htmlFor={id} className="block text-[13px] font-medium">{label}</label>
       {children(id)}
-      {error ? <p className="text-xs text-err">{error}</p> : hint ? <p className="text-xs text-muted">{hint}</p> : null}
+      {error ? <p className="text-xs text-err">{error}</p> : hint ? <p className="text-xs text-muted break-words">{hint}</p> : null}
     </div>
   );
 }

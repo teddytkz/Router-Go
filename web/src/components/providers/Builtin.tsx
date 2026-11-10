@@ -74,6 +74,7 @@ export function BuiltinDetail({ provider: p }: { provider: BuiltinProvider }) {
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight break-words">{p.name}</h1>
             <p className="text-muted mt-0.5">{n} connection{n === 1 ? "" : "s"}</p>
+            {p.baseUrl && <p className="text-xs text-muted mt-0.5 font-mono break-all" title="Upstream URL">{p.baseUrl}</p>}
           </div>
           <StatusBadge p={p} />
         </div>

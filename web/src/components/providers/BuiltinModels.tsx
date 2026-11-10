@@ -9,7 +9,7 @@ import { CapsEditor } from "./CapsEditor";
 import { fmtMs } from "./shared";
 
 type Result = { state: "testing" } | { state: "ok" | "fail"; msg: string };
-const act = "grid size-7 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-text disabled:opacity-60 cursor-pointer";
+const act = "grid size-7 place-items-center rounded-md disabled:opacity-60 cursor-pointer";
 
 function AddModelModal({ p, onClose }: { p: BuiltinProvider; onClose: () => void }) {
   const toast = useToast(), add = useAddCustomModel(), [id, setId] = useState("");
@@ -74,34 +74,31 @@ export function BuiltinModels({ p }: { p: BuiltinProvider }) {
             </ul>
           </div>
         )}
-        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" aria-label="Enabled models">
+        <ul className="flex flex-wrap gap-2" aria-label="Enabled models">
           {enabled.map((m) => {
             const r = results[m.id], testing = r?.state === "testing";
             return (
-              <li key={m.id} className={cn("rounded-lg border bg-surface p-3 min-w-0", r?.state === "ok" ? "border-ok/60" : r?.state === "fail" ? "border-err/60" : "border-border")}>
+              <li key={m.id} className={cn("rounded-lg border bg-surface p-2 max-w-full", r?.state === "ok" ? "border-ok/60" : r?.state === "fail" ? "border-err/60" : "border-border")}>
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex min-w-0 flex-1 items-center rounded-md bg-surface-2 pl-2 font-mono text-xs text-muted" title={m.name && m.name !== m.id ? m.name : undefined}>
-                    <span className="truncate" title={code(m.id)}>{code(m.id)}</span><CopyButton value={code(m.id)} label={`Copy ${code(m.id)}`} />
+                  <span className="inline-flex min-w-0 items-center rounded-md bg-surface-2 pl-2 font-mono text-xs text-muted" title={m.name && m.name !== m.id ? m.name : undefined}>
+                    <span className="break-all" title={code(m.id)}>{code(m.id)}</span><CopyButton value={code(m.id)} label={`Copy ${code(m.id)}`} />
                   </span>
+                  <CapBadges caps={m.effective} detected={m.detected} size="xs" />
                   <div className="flex shrink-0 items-center gap-0.5">
-                    <button type="button" className={act} disabled={testing} onClick={() => test(m.id)} aria-label={`Test ${code(m.id)}`} title="Test">
+                    <button type="button" className={cn(act, "text-warn hover:bg-warn-soft")} disabled={testing} onClick={() => test(m.id)} aria-label={`Test ${code(m.id)}`} title="Test">
                       {testing ? <Loader2 className="size-4 animate-spin" /> : r?.state === "ok" ? <Check className="size-4 text-ok" /> : r?.state === "fail" ? <X className="size-4 text-err" /> : <Zap className="size-4" />}
                     </button>
-                    <button type="button" className={act} disabled={!custom.data?.some((c) => c.providerAlias === p.alias && c.id === m.id)} onClick={() => setEditing(m.id)} aria-haspopup="dialog" aria-label={`Edit capabilities of ${m.id}`} title="Edit capabilities"><SlidersHorizontal className="size-4" /></button>
-                    <button type="button" className={cn(act, "hover:text-err")} disabled={busy === m.id} onClick={() => disable(m.id)} aria-label={`${m.custom ? "Remove" : "Disable"} ${m.id}`} title={m.custom ? "Remove" : "Disable"}>{m.custom ? <Trash2 className="size-4" /> : <X className="size-4" />}</button>
+                    <button type="button" className={cn(act, "text-accent hover:bg-accent-soft")} disabled={!custom.data?.some((c) => c.providerAlias === p.alias && c.id === m.id)} onClick={() => setEditing(m.id)} aria-haspopup="dialog" aria-label={`Edit capabilities of ${m.id}`} title="Edit capabilities"><SlidersHorizontal className="size-4" /></button>
+                    <button type="button" className={cn(act, "text-err hover:bg-err-soft")} disabled={busy === m.id} onClick={() => disable(m.id)} aria-label={`${m.custom ? "Remove" : "Disable"} ${m.id}`} title={m.custom ? "Remove custom model" : "Disable"}>{m.custom ? <Trash2 className="size-4" /> : <X className="size-4" />}</button>
                   </div>
-                </div>
-                <div className="mt-2 flex min-h-6 items-center gap-2">
-                  <CapBadges caps={m.effective} detected={m.detected} size="xs" />
-                  {m.custom && <Badge>custom</Badge>}
                 </div>
                 {r?.state === "ok" && <p role="status" className="mt-1 text-xs text-ok">{r.msg}</p>}
               </li>
             );
           })}
-          <li>
-            <button type="button" onClick={() => setAdding(true)} aria-haspopup="dialog" className="flex h-full min-h-24 w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border p-3 text-[13px] text-muted hover:border-accent/60 hover:text-text cursor-pointer transition-colors">
-              <Plus className="size-5" aria-hidden />Add Model
+          <li className="flex">
+            <button type="button" onClick={() => setAdding(true)} aria-haspopup="dialog" className="flex h-full min-h-12 w-full items-center px-4 justify-center gap-1.5 rounded-lg border border-dashed border-border p-2 text-[13px] text-muted hover:border-accent/60 hover:text-text cursor-pointer transition-colors">
+              <Plus className="size-4" aria-hidden />Add Model
             </button>
           </li>
         </ul>
