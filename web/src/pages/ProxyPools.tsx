@@ -1,10 +1,11 @@
-import { CloudUpload, Network, Pencil, Plus, Trash2, Zap } from "lucide-react";
+import { CloudUpload, Loader2, Network, Pencil, Plus, Trash2, Zap } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, ConfirmModal, EmptyState, errText, Field, Input, Modal, PageHeader, Skeleton, Switch, useToast } from "../components/ui";
 import { ago, useNow } from "../components/usage/shared";
 import type { ProxyPool } from "../lib/api";
 import { useCreateProxyPool, useDeleteProxyPool, useDeployRelay, useProxyPools, useTestProxyPool, useUpdateProxyPool } from "../lib/hooks";
 
+const act = "grid size-7 place-items-center rounded-md cursor-pointer disabled:opacity-60";
 const TYPE = { http: "Proxy", vercel: "Vercel relay", cloudflare: "Cloudflare relay" } as const;
 
 // ---------- add / edit a plain proxy ----------
@@ -67,7 +68,7 @@ function PoolCard({ p, now, onEdit }: { p: ProxyPool; now: number; onEdit: () =>
         <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent"><Network className="size-4" aria-hidden /></div>
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold truncate" title={p.name}>{p.name}</h3>
-          <p className="font-mono text-xs text-muted truncate" title={p.proxyUrl}>{p.proxyUrl}</p>
+          <p className="font-mono text-xs text-muted break-all">{p.proxyUrl}</p>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge tone="accent">{TYPE[p.type]}</Badge>
             <Badge tone={tone}>{p.testStatus === "unknown" ? "untested" : p.testStatus === "active" ? "working" : "failing"}</Badge>
@@ -77,12 +78,12 @@ function PoolCard({ p, now, onEdit }: { p: ProxyPool; now: number; onEdit: () =>
           </div>
           {p.testStatus === "error" && p.lastError && <p className="mt-1.5 text-xs text-err break-words">{p.lastError}</p>}
         </div>
-        <Switch checked={p.isActive} label={`${p.name} enabled`} disabled={update.isPending} onChange={(v) => update.mutate({ id: p.id, isActive: v }, { onError: (e) => toast("err", errText(e)) })} />
-      </div>
-      <div className="mt-3 flex flex-wrap gap-1 border-t border-border pt-3">
-        <Button size="sm" variant="ghost" loading={test.isPending} onClick={run}>{!test.isPending && <Zap className="size-4" />}Test</Button>
-        <Button size="sm" variant="ghost" onClick={onEdit}><Pencil className="size-4" />Edit</Button>
-        <Button size="sm" variant="ghost" className="text-err hover:text-err" onClick={() => setConfirm(true)}><Trash2 className="size-4" />Delete</Button>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button type="button" className={`${act} text-warn hover:bg-warn-soft`} disabled={test.isPending} onClick={run} aria-label={`Test ${p.name}`} title="Test">{test.isPending ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}</button>
+          <button type="button" className={`${act} text-accent hover:bg-accent-soft`} onClick={onEdit} aria-label={`Edit ${p.name}`} title="Edit"><Pencil className="size-4" /></button>
+          <button type="button" className={`${act} text-err hover:bg-err-soft`} onClick={() => setConfirm(true)} aria-label={`Delete ${p.name}`} title="Delete"><Trash2 className="size-4" /></button>
+          <Switch checked={p.isActive} label={`${p.name} enabled`} disabled={update.isPending} onChange={(v) => update.mutate({ id: p.id, isActive: v }, { onError: (e) => toast("err", errText(e)) })} />
+        </div>
       </div>
       <ConfirmModal open={confirm} onClose={() => setConfirm(false)} loading={del.isPending} title="Delete proxy pool"
         body={`Remove "${p.name}"?${p.boundConnectionCount ? ` ${p.boundConnectionCount} key(s) using it will connect directly again.` : ""}${p.type !== "http" ? " The deployed worker stays in your account; delete it there too." : ""}`}

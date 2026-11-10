@@ -1,9 +1,10 @@
-import { Boxes, Pencil, Plus, Tag, Trash2 } from "lucide-react";
+import { ArrowRight, Boxes, Pencil, Plus, Tag, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import { Badge, Button, Card, ConfirmModal, EmptyState, errText, Field, Input, Modal, PageHeader, Select, Skeleton, useToast } from "../components/ui";
 import type { CustomModel } from "../lib/api";
 import { useAddCustomModel, useAliases, useAllModels, useCombos, useCustomModels, useDeleteAlias, useDeleteCustomModel, useNodes, useAllNodes, useSetAlias } from "../lib/hooks";
 
+const act = "grid size-7 place-items-center rounded-md cursor-pointer";
 const th = "text-left text-xs font-medium text-muted px-4 py-2";
 
 // ---------- masks (stored as aliases) ----------
@@ -32,18 +33,16 @@ function Aliases() {
     <Card className="mb-6">
       <div className="px-4 h-12 flex items-center justify-between border-b border-border"><h2 className="font-semibold">Masked names</h2>{add}</div>
       {q.isLoading ? <Skeleton className="h-20 m-4" /> : rows.length ? (
-        <div className="overflow-x-auto"><table className="w-full">
-          <thead><tr className="border-b border-border"><th className={th}>Masked name</th><th className={th}>Real model / combo</th><th className="w-24" /></tr></thead>
-          <tbody className="divide-y divide-border">{rows.map(([a, m]) => (
-            <tr key={a}>
-              <td className="px-4 py-2 font-mono text-[13px]">{a}</td>
-              <td className="px-4 py-2 font-mono text-[13px] text-muted break-all">{m}</td>
-              <td className="px-2 py-1 text-right whitespace-nowrap">
-                <Button size="sm" variant="ghost" aria-label={`Edit ${a}`} onClick={() => setEdit({ alias: a, model: m })}><Pencil className="size-4" /></Button>
-                <Button size="sm" variant="ghost" aria-label={`Delete ${a}`} onClick={() => setRm(a)}><Trash2 className="size-4" /></Button>
-              </td>
-            </tr>))}</tbody>
-        </table></div>
+        <ul className="divide-y divide-border">{rows.map(([a, m]) => (
+          <li key={a} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+            <span className="rounded-md bg-accent-soft px-2 py-0.5 font-mono text-[13px] text-accent break-all">{a}</span>
+            <ArrowRight className="size-4 shrink-0 text-muted" aria-hidden />
+            <span className="min-w-0 flex-1 font-mono text-[13px] text-muted break-all">{m}</span>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button type="button" className={`${act} text-accent hover:bg-accent-soft`} aria-label={`Edit ${a}`} title="Edit" onClick={() => setEdit({ alias: a, model: m })}><Pencil className="size-4" /></button>
+              <button type="button" className={`${act} text-err hover:bg-err-soft`} aria-label={`Delete ${a}`} title="Delete" onClick={() => setRm(a)}><Trash2 className="size-4" /></button>
+            </div>
+          </li>))}</ul>
       ) : <EmptyState icon={<Tag className="size-6" />} title="No masked names" body="A mask is a name clients send instead of the real model or combo, so they keep a stable name while you switch what is behind it." action={add} />}
       {edit && <AliasModal {...edit} onClose={() => setEdit(null)} />}
       <ConfirmModal open={!!rm} onClose={() => setRm(null)} loading={del.isPending} title="Delete mask" body={`Remove the masked name "${rm}"? Clients using it will get an error.`}
@@ -93,7 +92,7 @@ function CustomModels() {
               <td className="px-4 py-2"><Badge tone="accent" className="font-mono">{m.providerAlias}/</Badge></td>
               <td className="px-4 py-2 font-mono text-[13px] break-all">{m.id}</td>
               <td className="px-4 py-2 text-muted">{m.name && m.name !== m.id ? m.name : "—"}</td>
-              <td className="px-2 py-1 text-right"><Button size="sm" variant="ghost" aria-label={`Delete ${m.providerAlias}/${m.id}`} onClick={() => setRm(m)}><Trash2 className="size-4" /></Button></td>
+              <td className="px-2 py-1 text-right"><button type="button" className={`${act} text-err hover:bg-err-soft`} aria-label={`Delete ${m.providerAlias}/${m.id}`} title="Delete" onClick={() => setRm(m)}><Trash2 className="size-4" /></button></td>
             </tr>))}</tbody>
         </table></div>
       ) : <EmptyState icon={<Boxes className="size-6" />} title={filter ? "No custom models for this provider" : "No custom models"} body="Register model IDs by hand for providers whose /models endpoint is missing or incomplete." action={add} />}
