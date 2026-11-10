@@ -219,9 +219,9 @@ func TestSaveModelWritesACatalogKeyForACatalogRow(t *testing.T) {
 	if got["freebuffModelKey"] != "m-61c26317cc" {
 		t.Errorf("settings = %v", got)
 	}
-	// the key outranks freebuffModel, so a stale named pick must not be left beside it
-	if got["freebuffModel"] != "deepseek/deepseek-v4-flash" {
-		t.Errorf("the named pick was dropped from the file: %v", got)
+	// a stale named pick left beside the key makes the turn run (and bill) on that model instead
+	if _, ok := got["freebuffModel"]; ok {
+		t.Errorf("the stale named pick survived: %v", got)
 	}
 }
 

@@ -462,12 +462,13 @@ func (c *client) saveModel(model string) error {
 	}
 	if isCatalogKey(model) {
 		// A catalogue row has no wire id of its own (freebuff-model-presets.ts): its opaque key is the only way to
-		// name it, and the CLI reads it back from this field. Writing freebuffModel alongside would leave the key in
-		// charge anyway, so the two are kept disjoint the way the CLI keeps them (saveFreebuffModelKeyPreference
-		// leaves freebuffModel alone; saveFreebuffModelPreference clears the key).
+		// name it. A leftover freebuffModel must go: the status bar shows the key's row, but the turn is admitted on
+		// the wire id, so a stale one bills (and refuses on) another model — live-proven: key m-61c26317cc beside
+		// freebuffModel deepseek/deepseek-v4-flash asked for Flash Fast (3 hours), not Slow (1 hour).
 		if raw, err := json.Marshal(model); err == nil {
 			settings["freebuffModelKey"] = raw
 		}
+		delete(settings, "freebuffModel")
 	} else {
 		if raw, err := json.Marshal(model); err == nil {
 			settings["freebuffModel"] = raw
