@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/process"
 )
 
@@ -26,6 +27,7 @@ type Sample struct {
 type Snapshot struct {
 	Current    Sample   `json:"current"`
 	CPUs       int      `json:"cpus"`
+	TotalRAM   uint64   `json:"totalRam"` // bytes of physical RAM on the machine, 0 if unknown
 	GoHeap     uint64   `json:"goHeap"` // bytes the Go runtime has allocated
 	Goroutines int      `json:"goroutines"`
 	History    []Sample `json:"history"`
@@ -81,5 +83,9 @@ func (s *Sampler) Snapshot() Snapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	h := append([]Sample{}, s.hist...)
-	return Snapshot{Current: h[len(h)-1], CPUs: runtime.NumCPU(), GoHeap: ms.HeapAlloc, Goroutines: runtime.NumGoroutine(), History: h}
+	var total uint64
+	if v, err := mem.VirtualMemory(); err == nil {
+		total = v.Total
+	}
+	return Snapshot{Current: h[len(h)-1], CPUs: runtime.NumCPU(), TotalRAM: total, GoHeap: ms.HeapAlloc, Goroutines: runtime.NumGoroutine(), History: h}
 }

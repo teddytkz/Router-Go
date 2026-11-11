@@ -164,7 +164,7 @@ function SystemCards({ s }: { s: SysSnapshot | undefined }) {
       </Card>
       <Card className="p-4">
         <div className="flex items-center justify-between gap-2 text-muted text-[13px]"><span className="inline-flex items-center gap-2"><MemoryStick className="size-4 text-accent" aria-hidden />RAM usage</span><span>Router-Go</span></div>
-        <div className="mt-2 flex items-baseline gap-2"><span className="text-2xl font-semibold tabular-nums">{bytes(c.rss)}</span><span className="text-xs text-muted">resident</span></div>
+        <div className="mt-2 flex items-baseline gap-2"><span className="text-2xl font-semibold tabular-nums">{bytes(c.rss)}</span><span className="text-xs text-muted">{s.totalRam ? `/ ${bytes(s.totalRam)} total RAM` : "resident"}</span></div>
         <div className="text-xs text-muted mt-1.5">Go heap {bytes(s.goHeap)}</div>
         <Spark values={rss} times={s.history.map((x) => x.t)} fmt={bytes} max={Math.max(1, ...rss)} label="Router-Go memory, last two minutes" />
       </Card>

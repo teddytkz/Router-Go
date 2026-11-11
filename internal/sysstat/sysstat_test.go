@@ -9,7 +9,7 @@ func TestSnapshotDescribesOnlyThisProcess(t *testing.T) {
 	s := &Sampler{}
 	snap := s.Snapshot()
 	c := snap.Current
-	if c.RSS == 0 || snap.GoHeap == 0 || snap.CPUs < 1 || snap.Goroutines < 1 {
+	if c.RSS == 0 || snap.TotalRAM < c.RSS || snap.GoHeap == 0 || snap.CPUs < 1 || snap.Goroutines < 1 {
 		t.Fatalf("snapshot = %+v", snap)
 	}
 	if c.CPU < 0 || c.CPU > 100 || time.Since(c.T) > time.Minute || len(snap.History) != 1 {

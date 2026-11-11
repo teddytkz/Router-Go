@@ -105,7 +105,7 @@ export type ModelTestResult = { ok: boolean; error?: string; latencyMs?: number;
 export type TestBatchResult = { connectionId: string; name: string; provider: string; providerName: string; ok: boolean; latencyMs: number; method?: string; error?: string };
 export type TestBatch = { results: TestBatchResult[]; summary: { total: number; passed: number; failed: number; skipped?: number } };
 export type SysSample = { t: string; cpu: number; rss: number };
-export type SysSnapshot = { current: SysSample; cpus: number; goHeap: number; goroutines: number; history: SysSample[] };
+export type SysSnapshot = { current: SysSample; cpus: number; totalRam: number; goHeap: number; goroutines: number; history: SysSample[] };
 export type LogEntry = { id: number; t: string; level: "INFO" | "WARN" | "ERROR"; msg: string };
 
 export type QuotaScope = "provider" | "connection";
