@@ -22,6 +22,8 @@ import (
 	"router-go/internal/consolelog"
 	"router-go/internal/db"
 	"router-go/internal/gateway"
+	"router-go/internal/instance"
+	"router-go/internal/tray"
 	"router-go/web"
 )
 
@@ -30,6 +32,7 @@ func main() {
 	resetPW := flag.Bool("reset-password", false, "remove the stored dashboard password (falls back to INITIAL_PASSWORD) and exit")
 	unlock := flag.Bool("remove-localhost-only", false, "turn off Settings → Local only (listen on all interfaces again) and exit; use it when Local only locked you out")
 	port := flag.Int("port", 0, "listen port (default 20128, or the port saved in Settings); overrides the PORT env var and the saved setting")
+	background := flag.Bool("background", false, "run without a terminal: start a detached copy that logs to <data dir>/logs/background.log, then exit")
 	flag.Parse()
 	if *version {
 		fmt.Println("router-go", config.Version)
@@ -61,6 +64,22 @@ func main() {
 		fmt.Println("Local only is off; the next start listens on all interfaces (HOSTNAME_BIND / ROUTER_GO_ADDR still win if set)")
 		return
 	}
+
+	if *background {
+		pid, logFile, err := detach(cfg.DataDir)
+		if err != nil {
+			log.Fatalf("background: %v (see %s)", err, logFile)
+		}
+		fmt.Printf("router-go running in the background (pid %d), log: %s\nstop it with: kill %d  (or the tray's Exit on Windows)\n", pid, logFile, pid)
+		return
+	}
+
+	// one router-go per data directory: an older one still running is stopped so this one can take its port
+	release, err := instance.Replace(cfg.DataDir)
+	if err != nil {
+		log.Printf("could not record the pid (a later start will not replace this one): %v", err)
+	}
+	defer release()
 
 	saved := 0
 	if s, err := store.Settings(); err == nil {
@@ -144,7 +163,14 @@ func main() {
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	stopTray := tray.Start(web.Icon(), func() {
+		select {
+		case stop <- syscall.SIGTERM:
+		default: // a shutdown is already under way
+		}
+	})
 	<-stop
+	defer stopTray()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	mu.Lock()

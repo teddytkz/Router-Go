@@ -216,6 +216,12 @@ Unlike `/api/quota` (user-made limits, unchanged): this is the quota the provide
 | Lockout/login limit → locked out | Reset via `router-go --reset-password` (deletes `settings.password`) |
 | Local only cut off a remote session | `router-go --remove-localhost-only` (sets `settings.localOnly=false`; run it on the machine, then start again) |
 
+### Single instance and tray (done, Windows tray untested)
+- `internal/instance`: at startup (after the `--reset-password` / `--remove-localhost-only` / `--version` exits, which must not kill a running server) the process reads `<data dir>/router-go.pid`, and if that pid is still a program with this executable's name it is terminated (SIGTERM, then a kill after 8 s; on Windows `TerminateProcess`), then the new pid is written. The name check stops a reused pid from killing an unrelated program. The pid file is removed on a clean exit.
+- `internal/tray` (Windows only, `fyne.io/systray`, no cgo): the dashboard's `apple-touch-icon.png` wrapped as an ICO; menu **Hide to tray** / **Show console** (hides the console window, or its Windows Terminal owner) and **Exit** (same graceful shutdown as Ctrl+C). Other platforms get a no-op.
+
+- `--background` (`cmd/router-go/background*.go`): after the early-exit flags, the process re-executes itself with the same arguments minus `--background`, detached (`Setsid` on Unix; `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` on Windows), stdout/stderr appended to `<data dir>/logs/background.log` (not rotated), and exits. It waits 1.5 s for the copy: if it died by then, it prints the failure and exits 1. The copy goes through `instance.Replace` like any start. Without a console the Windows tray has no Hide item.
+
 ### Proxy pools (done)
 - A pool = a regular proxy (`http(s)://`, `socks5://`) or a relay that the user deploys to Vercel (Edge function) / Cloudflare (Worker) using an API token (used once, not stored).
 - A key selects a pool through `providerSpecificData.proxyPoolId` (Edit key dialog). All upstream calls (chat, key test, model test) go through a single `http.RoundTripper` that reads the pool from the context.

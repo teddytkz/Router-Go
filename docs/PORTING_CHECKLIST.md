@@ -164,7 +164,7 @@ The "Phase" column refers to [`PRD.md`](./PRD.md) §4. **Last updated: 2026-11-0
 - [~] Backup / restore to JSON (Settings; `GET /api/backup`, `POST /api/restore`) — Router-Go only _(config tables only; usage history is not included; XRouter-Next export files are not read)_
 - [ ] Dockerfile / docker-compose — F2
 - [ ] CLI launcher (`start/stop/status`, daemon) — F6
-- [ ] Tray, autostart, updater — F6
+- [~] Tray, autostart, updater — F6 _(done: Windows tray icon with Hide to tray / Exit, and a single instance per data directory that stops the older one; `--background` (detached copy, log file; proven on Linux, Windows only cross-compiled); not yet: autostart, updater, a tray on Linux/macOS (macOS needs cgo, which the build avoids), Open dashboard item; the Windows tray was only cross-compiled, never run)_
 - [ ] Tunnel (Cloudflare/Tailscale) — F6
 - [ ] Cloud sync — —
 

@@ -53,6 +53,10 @@ First login: the initial password is `123456`, accepted from any machine. The se
 
 **Settings → Backup & restore** downloads providers, keys, combos, models, proxy pools and settings as one JSON file (secrets in clear text, keep it private) and restores it, replacing the current configuration. Usage history and this machine's port / Local only setting are not included.
 
+**One instance per data directory.** Starting `router-go` again with the same data directory stops the copy that is already running (its pid is kept in `<data dir>/router-go.pid`) and takes over; copies with a different data directory are left alone. On Windows a tray icon offers **Hide to tray** (hides the console window; the item then reads **Show console**) and **Exit**. There is no tray on Linux or macOS.
+
+**`--background`** starts a detached copy without a terminal (Linux/macOS: its own session, so closing the terminal does not stop it; Windows: no console window, so no Hide item in the tray) and exits; the copy logs to `<data dir>/logs/background.log`. It reports a failure to start (for example the port is taken) and exits with status 1. Stop it with `kill <pid>` (the pid is printed and kept in `router-go.pid`), the tray's Exit on Windows, or by starting `router-go` again.
+
 Port priority: `--port` > env `PORT` / `ROUTER_GO_ADDR` > Settings > `20128`. The port can also be changed in **Settings → Port**; the server moves immediately, no restart needed.
 
 ## Usage

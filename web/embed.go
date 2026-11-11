@@ -12,6 +12,12 @@ import (
 //go:embed all:dist
 var distFS embed.FS
 
+// Icon is the dashboard's PNG icon (used by the tray).
+func Icon() []byte {
+	b, _ := distFS.ReadFile("dist/apple-touch-icon.png")
+	return b
+}
+
 // Handler serves files from web/dist; unknown extension-less paths fall back to index.html (client-side routing).
 func Handler() http.Handler {
 	sub, err := fs.Sub(distFS, "dist")
