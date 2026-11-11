@@ -282,3 +282,28 @@ func TestPasswordChangeAndConnectionMasking(t *testing.T) {
 		t.Fatalf("stored data = %s", raw)
 	}
 }
+
+// Clients that append /v1 to a base URL already ending in /v1 must still reach the same routes.
+func TestDoubledV1PrefixIsCollapsed(t *testing.T) {
+	e := newEnv(t, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, `{}`) }, "chat")
+	for _, p := range []string{"/v1/models", "/v1/v1/models", "/v1/v1/v1/models"} {
+		req, _ := http.NewRequest("GET", e.srv.URL+p, nil)
+		req.Header.Set("Authorization", "Bearer "+e.apiKey)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Errorf("%s: status %d, want 200", p, resp.StatusCode)
+		}
+	}
+	// a path that merely starts with "/v1/v1x" is left alone
+	req, _ := http.NewRequest("GET", e.srv.URL+"/v1/v1x", nil)
+	if resp, err := http.DefaultClient.Do(req); err == nil {
+		resp.Body.Close()
+		if resp.StatusCode == 200 {
+			t.Errorf("/v1/v1x unexpectedly 200")
+		}
+	}
+}

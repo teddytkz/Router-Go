@@ -64,7 +64,7 @@ func (a *API) recentTest(key string) (testEntry, bool) {
 func Handler(cfg *config.Config, store *db.Store, spa http.Handler) http.Handler {
 	a := &API{Cfg: cfg, Store: store, GW: gateway.New(store), Session: auth.NewSession(cfg.JWTSecret), Limiter: auth.NewLimiter()}
 	r := chi.NewRouter()
-	r.Use(middleware.Recoverer, securityHeaders)
+	r.Use(middleware.Recoverer, collapseV1, securityHeaders)
 
 	r.Group(func(r chi.Router) {
 		r.Use(cors)
@@ -173,6 +173,21 @@ func Handler(cfg *config.Config, store *db.Store, spa http.Handler) http.Handler
 
 	r.NotFound(spa.ServeHTTP)
 	return r
+}
+
+// collapseV1 turns /v1/v1/... into /v1/...: clients that append /v1 to a base URL which already ends in /v1.
+// Runs before routing (root middleware), so every /v1 route benefits.
+func collapseV1(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		for strings.HasPrefix(p, "/v1/v1/") || p == "/v1/v1" {
+			p = p[3:]
+		}
+		if p != r.URL.Path {
+			r.URL.Path, r.URL.RawPath = p, ""
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func securityHeaders(next http.Handler) http.Handler {
