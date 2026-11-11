@@ -1,9 +1,9 @@
-import { Eye, EyeOff, KeyRound, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { Badge, Button, Card, ConfirmModal, CopyButton, EmptyState, errText, fmtTime, Input, Modal, PageHeader, Skeleton, Switch, useToast, Field } from "../components/ui";
 import { ModelListEditor } from "../components/ModelListEditor";
 import type { ApiKey } from "../lib/api";
-import { useAliases, useAllModels, useCombos, useCreateKey, useDeleteKey, useKeys, useNodes, useAllNodes, useSettings, useToggleKey, useUpdateKeyAccess, useUpdateSettings } from "../lib/hooks";
+import { useAliases, useAllModels, useCombos, useCreateKey, useDeleteKey, useEditKey, useKeys, useNodes, useAllNodes, useSettings, useToggleKey, useUpdateKeyAccess, useUpdateSettings } from "../lib/hooks";
 
 function AccessModal({ k, onClose }: { k: ApiKey; onClose: () => void }) {
   const toast = useToast(), save = useUpdateKeyAccess();
@@ -29,9 +29,23 @@ function AccessModal({ k, onClose }: { k: ApiKey; onClose: () => void }) {
   );
 }
 
+function EditModal({ k, onClose }: { k: ApiKey; onClose: () => void }) {
+  const toast = useToast(), save = useEditKey();
+  const [name, setName] = useState(k.name), [key, setKey] = useState(k.key);
+  const valid = name.trim() !== "" && key.trim().length >= 16 && !/\s/.test(key.trim());
+  const submit = () => save.mutate({ id: k.id, name: name.trim(), key: key.trim() }, { onSuccess: () => { toast("ok", "Key updated"); onClose(); }, onError: (e) => toast("err", errText(e)) });
+  return (
+    <Modal open onClose={onClose} title={`Edit key · ${k.name}`}
+      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" loading={save.isPending} disabled={!valid} onClick={submit}>Save</Button></>}>
+      <Field label="Name">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>
+      <Field label="Key" hint="At least 16 characters, no spaces. Changing it makes clients using the old key get 401.">{(id) => <Input id={id} className="font-mono" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === "Enter" && valid && submit()} />}</Field>
+    </Modal>
+  );
+}
+
 function KeyRow({ k }: { k: ApiKey }) {
   const toast = useToast(), toggle = useToggleKey(), del = useDeleteKey();
-  const [show, setShow] = useState(false), [confirm, setConfirm] = useState(false), [access, setAccess] = useState(false);
+  const [show, setShow] = useState(false), [confirm, setConfirm] = useState(false), [access, setAccess] = useState(false), [edit, setEdit] = useState(false);
   const restricted = k.access?.restricted;
   const shown = show ? k.key : k.key.slice(0, 7) + "•".repeat(14) + k.key.slice(-4);
   return (
@@ -46,8 +60,10 @@ function KeyRow({ k }: { k: ApiKey }) {
       <span className="text-xs text-muted hidden sm:block">{fmtTime(k.createdAt)}</span>
       <Button size="sm" variant="ghost" onClick={() => setShow((s) => !s)} aria-label={show ? "Hide key" : "Reveal key"}>{show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</Button>
       <CopyButton value={k.key} label="Copy key" />
+      <Button size="sm" variant="ghost" aria-label={`Edit ${k.name}`} onClick={() => setEdit(true)}><Pencil className="size-4" /></Button>
       <Switch checked={k.isActive} label={`${k.name} enabled`} onChange={(v) => toggle.mutate({ id: k.id, isActive: v }, { onError: (e) => toast("err", errText(e)) })} />
       <Button size="sm" variant="ghost" aria-label={`Delete ${k.name}`} onClick={() => setConfirm(true)}><Trash2 className="size-4" /></Button>
+      {edit && <EditModal k={k} onClose={() => setEdit(false)} />}
       {access && <AccessModal k={k} onClose={() => setAccess(false)} />}
       <ConfirmModal open={confirm} onClose={() => setConfirm(false)} loading={del.isPending} title="Delete API key" body={`Clients using "${k.name}" will immediately get 401.`}
         onConfirm={() => del.mutate(k.id, { onSuccess: () => { setConfirm(false); toast("ok", "Key deleted"); }, onError: (e) => toast("err", errText(e)) })} />

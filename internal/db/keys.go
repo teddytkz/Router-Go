@@ -137,6 +137,34 @@ func (s *Store) SetAPIKeyActive(id string, active bool) error {
 	return affected(r, err)
 }
 
+// UpdateAPIKey renames a key and/or replaces its secret (nil leaves a field alone). A taken secret
+// returns ErrConflict. Usage rows follow the new secret so history stays attributed to the key.
+func (s *Store) UpdateAPIKey(id string, name, key *string) error {
+	return s.withTx(func(tx *sql.Tx) error {
+		var old string
+		if err := tx.QueryRow(`SELECT key FROM apiKeys WHERE id=?`, id).Scan(&old); err != nil {
+			return ErrNotFound
+		}
+		if name != nil {
+			if _, err := tx.Exec(`UPDATE apiKeys SET name=? WHERE id=?`, *name, id); err != nil {
+				return err
+			}
+		}
+		if key != nil && *key != old {
+			if _, err := tx.Exec(`UPDATE apiKeys SET key=? WHERE id=?`, *key, id); err != nil {
+				if strings.Contains(err.Error(), "UNIQUE") {
+					return ErrConflict
+				}
+				return err
+			}
+			if _, err := tx.Exec(`UPDATE usageHistory SET apiKey=? WHERE apiKey=?`, *key, old); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (s *Store) DeleteAPIKey(id string) error {
 	r, err := s.DB.Exec(`DELETE FROM apiKeys WHERE id=?`, id)
 	return affected(r, err)

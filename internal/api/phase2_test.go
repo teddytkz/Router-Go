@@ -363,10 +363,24 @@ func TestDashboardPhase2API(t *testing.T) {
 	expect("oversized allow list", st, 400)
 	st, _ = call("PATCH", "/api/keys/"+k["id"].(string), `{"access":{"restricted":false}}`)
 	expect("unrestrict", st, 200)
+	st, _ = call("PATCH", "/api/keys/"+k["id"].(string), `{"name":"  "}`)
+	expect("blank key name", st, 400)
+	st, _ = call("PATCH", "/api/keys/"+k["id"].(string), `{"key":"short"}`)
+	expect("short key secret", st, 400)
+	st, _ = call("PATCH", "/api/keys/"+k["id"].(string), `{"name":"renamed","key":"sk-custom-secret-123456"}`)
+	expect("edit key name and secret", st, 200)
+	st, out = call("POST", "/api/keys", `{"name":"other"}`)
+	expect("create second key", st, 201)
+	st, _ = call("PATCH", "/api/keys/"+out["key"].(map[string]any)["id"].(string), `{"key":"sk-custom-secret-123456"}`)
+	expect("duplicate key secret", st, 409)
+	st, _ = call("PATCH", "/api/keys/nope", `{"name":"x"}`)
+	expect("edit unknown key", st, 404)
 	_, out = call("GET", "/api/keys", "")
 	for _, raw := range out["keys"].([]any) {
 		if m := raw.(map[string]any); m["id"] == k["id"] && m["access"].(map[string]any)["restricted"] != false {
 			t.Errorf("key still restricted: %v", m)
+		} else if m["id"] == k["id"] && (m["name"] != "renamed" || m["key"] != "sk-custom-secret-123456") {
+			t.Errorf("key not edited: %v", m)
 		}
 	}
 

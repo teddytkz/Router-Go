@@ -567,15 +567,39 @@ func (a *API) patchKey(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		IsActive *bool      `json:"isActive"`
 		Access   *db.Access `json:"access"`
+		Name     *string    `json:"name"`
+		Key      *string    `json:"key"`
 	}
 	if !readJSON(w, r, &in) {
 		return
 	}
-	if in.IsActive == nil && in.Access == nil {
-		writeErr(w, 400, "isActive or access is required")
+	if in.IsActive == nil && in.Access == nil && in.Name == nil && in.Key == nil {
+		writeErr(w, 400, "nothing to update")
 		return
 	}
 	id := chi.URLParam(r, "id")
+	if in.Name != nil || in.Key != nil {
+		if in.Name != nil {
+			n := strings.TrimSpace(*in.Name)
+			if n == "" {
+				writeErr(w, 400, "name is required")
+				return
+			}
+			in.Name = &n
+		}
+		if in.Key != nil {
+			k := strings.TrimSpace(*in.Key)
+			if len(k) < 16 || strings.ContainsAny(k, " \t\r\n") { // a short secret is guessable; whitespace cannot be sent in a header
+				writeErr(w, 400, "key must be at least 16 characters with no spaces")
+				return
+			}
+			in.Key = &k
+		}
+		if err := a.Store.UpdateAPIKey(id, in.Name, in.Key); err != nil {
+			dbErr(w, err)
+			return
+		}
+	}
 	if in.Access != nil {
 		if _, err := db.ValidateAccess(*in.Access); err != nil {
 			writeErr(w, 400, err.Error())
