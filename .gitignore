@@ -5,3 +5,5 @@ node_modules
 
 # local-only tooling (never committed)
 /.local
+
+/bin

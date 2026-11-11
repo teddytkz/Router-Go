@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 
 for t in go bun; do command -v "$t" >/dev/null || { echo "error: '$t' not found in PATH" >&2; exit 1; }; done
 
-out=router-go
+out=bin/router-go
 [ "${GOOS:-$(go env GOOS)}" = windows ] && out=router-go.exe
 
 echo "==> dashboard"
