@@ -224,16 +224,20 @@ func (g *Gateway) InvalidateModels(nodeID string) {
 	g.cache.mu.Unlock()
 }
 
-// probeRequest is the smallest valid request for a node: one token of "ping". It always streams: some upstreams only
-// accept streaming chat (CodeBuddy), and others answer a stream in about a second while a non-stream call hangs.
+// probePrompt is what a test call asks: a real greeting and question rather than a bare "ping".
+const probePrompt = "hi, who are you? are you ai?"
+
+// probeRequest is the smallest valid request for a node: probePrompt with a one-token answer budget (16 on
+// responses). It always streams: some upstreams only accept streaming chat (CodeBuddy), and others answer a stream
+// in about a second while a non-stream call hangs.
 func probeRequest(anthropic bool, apiType, model string) (path string, body map[string]any) {
 	switch {
 	case anthropic:
-		return "/messages", map[string]any{"model": model, "max_tokens": 1, "stream": true, "messages": []any{map[string]any{"role": "user", "content": "ping"}}}
+		return "/messages", map[string]any{"model": model, "max_tokens": 1, "stream": true, "messages": []any{map[string]any{"role": "user", "content": probePrompt}}}
 	case apiType == "responses":
-		return "/responses", map[string]any{"model": model, "input": "ping", "max_output_tokens": 16, "stream": true}
+		return "/responses", map[string]any{"model": model, "input": probePrompt, "max_output_tokens": 16, "stream": true}
 	}
-	return "/chat/completions", map[string]any{"model": model, "max_tokens": 1, "stream": true, "stream_options": map[string]any{"include_usage": true}, "messages": []any{map[string]any{"role": "user", "content": "ping"}}}
+	return "/chat/completions", map[string]any{"model": model, "max_tokens": 1, "stream": true, "stream_options": map[string]any{"include_usage": true}, "messages": []any{map[string]any{"role": "user", "content": probePrompt}}}
 }
 
 const (

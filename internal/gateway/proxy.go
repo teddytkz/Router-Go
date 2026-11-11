@@ -329,6 +329,8 @@ func (g *Gateway) attempt(w http.ResponseWriter, r *http.Request, t target, cf s
 			return outcome{}, false
 		}
 		g.logPool(ConnCtx(r.Context(), c), node, c)
+		// the finished-request line only appears once the answer is complete: say now where it went, so a long stream is visible
+		consolelog.Logf("INFO", strings.ToUpper(cf), "%s via %s/%s · sent, waiting for the answer", t.label, node.Name, c.Name)
 		var resp *http.Response
 		var err error
 		if native { // the provider's own wire protocol; the answer comes back as chat (uf is "chat")

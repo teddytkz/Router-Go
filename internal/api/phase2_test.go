@@ -890,7 +890,7 @@ func TestConsoleLogStream(t *testing.T) {
 
 	e.chat(`{"model":"fb","messages":[]}`, e.apiKey) // first member is rate limited: cooldown, fallback, then success
 	var lines []string
-	for len(lines) < 3 {
+	for !strings.Contains(strings.Join(lines, "\n"), "[CHAT] fb → two/fine") { // the finished-request line comes last
 		m := next()
 		if m["type"] == "lines" {
 			for _, raw := range m["entries"].([]any) {
@@ -900,7 +900,10 @@ func TestConsoleLogStream(t *testing.T) {
 		}
 	}
 	all := strings.Join(lines, "\n")
-	for _, want := range []string{"WARN [UPSTREAM] Mock/k-one → 429", "INFO [COMBO] fb: mock/x failed (429)", "INFO [CHAT] fb → two/fine via Two/k-two"} {
+	for _, want := range []string{
+		"INFO [CHAT] mock/x via Mock/k-one · sent, waiting for the answer", // logged before the answer, not after
+		"INFO [CHAT] two/fine via Two/k-two · sent, waiting for the answer",
+		"WARN [UPSTREAM] Mock/k-one → 429", "INFO [COMBO] fb: mock/x failed (429)", "INFO [CHAT] fb → two/fine via Two/k-two"} {
 		if !strings.Contains(all, want) {
 			t.Errorf("log is missing %q in:\n%s", want, all)
 		}
