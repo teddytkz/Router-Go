@@ -86,6 +86,8 @@ func Handler(cfg *config.Config, store *db.Store, spa http.Handler) http.Handler
 			r.Use(a.requireSession)
 			r.Get("/settings", a.getSettings)
 			r.Patch("/settings", a.patchSettings)
+			r.Get("/backup", a.exportBackup)
+			r.Post("/restore", a.restoreBackup)
 
 			r.Get("/keys", a.listKeys)
 			r.Post("/keys", a.createKey)
@@ -298,12 +300,6 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 401, map[string]any{"error": "Invalid password. " + strconv.Itoa(left) + " attempt(s) left before lockout.", "remainingBeforeLock": left})
 		return
 	}
-	// A public default password must never mint a remote session (it would let anyone disable auth).
-	if (!hasHash || hash == "") && auth.IsPlaceholder(a.Cfg.InitialPassword) && !auth.IsLocal(r) {
-		writeJSON(w, 403, map[string]any{"success": false, "mustChangePassword": true,
-			"error": "Default password must be changed before remote access. Log in from the local machine or set INITIAL_PASSWORD."})
-		return
-	}
 	a.Limiter.Success(ip)
 	secure := a.Cfg.SecureCookie || r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil
 	if err := a.Session.SetCookie(w, secure); err != nil {
@@ -318,6 +314,47 @@ func (a *API) logout(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, 200, map[string]any{"success": true})
 }
 
+// ---- backup / restore ----
+
+const maxRestoreBytes = 64 << 20
+
+// exportBackup downloads the configuration as JSON. The file holds every secret in clear text.
+func (a *API) exportBackup(w http.ResponseWriter, _ *http.Request) {
+	b, err := a.Store.Export()
+	if err != nil {
+		writeErr(w, 500, "internal error")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="router-go-backup-`+time.Now().Format("20060102-150405")+`.json"`)
+	w.Header().Set("Cache-Control", "no-store")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(b)
+}
+
+func (a *API) restoreBackup(w http.ResponseWriter, r *http.Request) {
+	// a cross-site form cannot send application/json without a preflight, which blocks a forged restore when login is off
+	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		writeErr(w, 415, "Content-Type must be application/json")
+		return
+	}
+	b, err := db.ParseBackup(http.MaxBytesReader(w, r.Body, maxRestoreBytes))
+	if err == nil {
+		var counts map[string]int
+		if counts, err = a.Store.Restore(b); err == nil {
+			consolelog.Logf("WARN", "BACKUP", "configuration restored from a backup file (%v)", counts)
+			writeJSON(w, 200, map[string]any{"restored": counts})
+			return
+		}
+	}
+	if errors.Is(err, db.ErrBackup) {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	writeErr(w, 500, "internal error")
+}
+
 // ---- settings ----
 
 func (a *API) publicSettings() (map[string]any, error) {
@@ -330,6 +367,7 @@ func (a *API) publicSettings() (map[string]any, error) {
 	s["hasPassword"], s["dataDir"], s["version"], s["machineId"] = hasPW, a.Cfg.DataDir, config.Version, a.Cfg.MachineID
 	s["activePort"], s["portSource"] = a.Cfg.PortInfo()
 	s["defaultPort"] = config.DefaultPort
+	s["localOnly"], s["hostFromEnv"], s["bindHost"] = a.Cfg.LocalOnly(), a.Cfg.Host != "", a.Cfg.BindHost()
 	return s, nil
 }
 
@@ -348,6 +386,7 @@ func (a *API) patchSettings(w http.ResponseWriter, r *http.Request) {
 		RequireAPIKey   *bool `json:"requireApiKey"`
 		StickyLimit     *int  `json:"comboStickyRoundRobinLimit"`
 		Port            *int  `json:"port"`
+		LocalOnly       *bool `json:"localOnly"`
 		CapacityAdapter map[string]struct {
 			Enabled    bool     `json:"enabled"`
 			RoundRobin bool     `json:"roundRobin"`
@@ -395,6 +434,20 @@ func (a *API) patchSettings(w http.ResponseWriter, r *http.Request) {
 			a.Cfg.SetPort(*in.Port, config.PortFromSettings)
 		}
 		patch["port"] = *in.Port
+	}
+	if in.LocalOnly != nil {
+		prev := a.Cfg.LocalOnly()
+		// HOSTNAME_BIND / ROUTER_GO_ADDR win: the value is only saved for a start without them
+		if *in.LocalOnly != prev && a.Cfg.Host == "" && a.Cfg.Rebind != nil {
+			a.Cfg.SetLocalOnly(*in.LocalOnly)
+			active, _ := a.Cfg.PortInfo()
+			if err := a.Cfg.Rebind(active); err != nil {
+				a.Cfg.SetLocalOnly(prev)
+				writeErr(w, 409, fmt.Sprintf("cannot change the bind address: %v", err))
+				return
+			}
+		}
+		patch["localOnly"] = *in.LocalOnly
 	}
 	if in.CapacityAdapter != nil {
 		norm := map[string]any{}

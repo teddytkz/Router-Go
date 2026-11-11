@@ -232,13 +232,12 @@ func TestLoginFlow(t *testing.T) {
 	if rec := post("127.0.0.1:1", `{"password":"wrong"}`); rec.Code != 401 {
 		t.Fatalf("wrong password: %d", rec.Code)
 	}
-	if rec := post("8.8.8.8:1", `{"password":"123456"}`); rec.Code != 403 {
-		t.Fatalf("default password from remote must be refused: %d", rec.Code)
+	for _, remote := range []string{"8.8.8.8:1", "127.0.0.1:1"} { // the default password works from anywhere
+		if rec := post(remote, `{"password":"123456"}`); rec.Code != 200 || len(rec.Result().Cookies()) == 0 {
+			t.Fatalf("default password from %s: %d", remote, rec.Code)
+		}
 	}
 	rec := post("127.0.0.1:1", `{"password":"123456"}`)
-	if rec.Code != 200 || len(rec.Result().Cookies()) == 0 {
-		t.Fatalf("local login: %d", rec.Code)
-	}
 	cookie := rec.Result().Cookies()[0]
 
 	req := httptest.NewRequest("GET", "/api/provider-nodes", nil)

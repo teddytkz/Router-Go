@@ -596,6 +596,21 @@ func TestPortSetting(t *testing.T) {
 	if s := get(); s["activePort"] != float64(7777) || s["portSource"] != "flag" || s["port"] != float64(8200) {
 		t.Errorf("flag override state = %v", s)
 	}
+	// local only: default is all interfaces; the toggle rebinds on the active port and a failed rebind rolls back
+	if s := get(); s["localOnly"] != false || s["bindHost"] != "" {
+		t.Errorf("default bind = %v", s)
+	}
+	moved = nil
+	if st, _ := patch(`{"localOnly":true}`); st != 200 || len(moved) != 1 || moved[0] != 7777 || !cfg.LocalOnly() {
+		t.Errorf("local only on: status=%d moved=%v", st, moved)
+	}
+	if s := get(); s["localOnly"] != true || s["bindHost"] != "127.0.0.1" {
+		t.Errorf("local only state = %v", s)
+	}
+	rebindErr = errors.New("boom")
+	if st, _ := patch(`{"localOnly":false}`); st != 409 || !cfg.LocalOnly() {
+		t.Errorf("failed rebind must keep local only: status=%d", st)
+	}
 }
 
 // Provider/model activity: in-flight requests are listed while they run, and usage records the concrete model.

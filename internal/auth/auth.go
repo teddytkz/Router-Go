@@ -30,11 +30,6 @@ func CheckPassword(hash, p string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(p)) == nil
 }
 
-var placeholders = map[string]bool{"123456": true, "change-me": true, "change-me-in-production": true, "password": true, "changeme": true}
-
-// IsPlaceholder reports well-known default passwords that must not unlock a remote dashboard.
-func IsPlaceholder(p string) bool { return placeholders[strings.ToLower(strings.TrimSpace(p))] }
-
 // ---- JWT session ----
 
 type Session struct{ secret []byte }
@@ -94,12 +89,6 @@ func ClientIP(r *http.Request, trustProxy bool) string {
 func IsLoopback(host string) bool {
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
-}
-
-// IsLocal is true only for a loopback peer that did not come through a proxy.
-func IsLocal(r *http.Request) bool {
-	host, _, _ := net.SplitHostPort(r.RemoteAddr)
-	return IsLoopback(host) && r.Header.Get("X-Forwarded-For") == ""
 }
 
 // ---- login limiter (progressive lockout, in-memory) ----

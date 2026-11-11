@@ -43,12 +43,15 @@ Requires Go and [Bun](https://bun.sh).
 
 `make build` does the same. To cross-compile, set the target: `GOOS=windows GOARCH=amd64 ./build.sh` (produces `router-go.exe`).
 
-First login: the initial password is `123456`, **accepted from localhost only**. Change it in Settings right away. A dashboard opened from another machine rejects the default password.
+First login: the initial password is `123456`, accepted from any machine. The server listens on all interfaces by default, so change the password in Settings (or set `INITIAL_PASSWORD`) before exposing it; **Settings → Local only** limits it to 127.0.0.1.
 
 ```bash
 ./router-go --port 8080          # another port
 ./router-go --reset-password     # forgot the password
+./router-go --remove-localhost-only  # Local only locked you out: listen on all interfaces again
 ```
+
+**Settings → Backup & restore** downloads providers, keys, combos, models, proxy pools and settings as one JSON file (secrets in clear text, keep it private) and restores it, replacing the current configuration. Usage history and this machine's port / Local only setting are not included.
 
 Port priority: `--port` > env `PORT` / `ROUTER_GO_ADDR` > Settings > `20128`. The port can also be changed in **Settings → Port**; the server moves immediately, no restart needed.
 
@@ -98,7 +101,7 @@ Data lives in `~/.router-go` (Windows: `%USERPROFILE%\.router-go`); the database
 | Env | Purpose |
 |---|---|
 | `PORT`, `ROUTER_GO_ADDR` | Port, or `host:port` |
-| `HOSTNAME_BIND` | Bind address; empty means all interfaces |
+| `HOSTNAME_BIND` | Bind address; empty means all interfaces, or 127.0.0.1 when **Settings → Local only** is on (the variable wins) |
 | `ROUTER_GO_DATA_DIR` / `DATA_DIR` | Data folder |
 | `INITIAL_PASSWORD` | Initial password |
 | `JWT_SECRET` | JWT secret (default: generated automatically) |

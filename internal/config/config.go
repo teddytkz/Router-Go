@@ -26,7 +26,7 @@ const (
 type Config struct {
 	DataDir         string
 	DBPath          string
-	Host            string // bind host (HOSTNAME_BIND), empty = all interfaces
+	Host            string // bind host (HOSTNAME_BIND / ROUTER_GO_ADDR), empty = decided by the localOnly setting
 	JWTSecret       []byte
 	APIKeySecret    string
 	MachineID       string
@@ -41,6 +41,7 @@ type Config struct {
 	port       int
 	portSource string
 	envPort    int
+	localOnly  bool // Settings → "Local only": bind 127.0.0.1 instead of all interfaces
 }
 
 // PortInfo is the port the server is (about to be) listening on and why.
@@ -56,10 +57,34 @@ func (c *Config) SetPort(port int, source string) {
 	c.mu.Unlock()
 }
 
+// SetLocalOnly records the saved "Local only" setting.
+func (c *Config) SetLocalOnly(v bool) {
+	c.mu.Lock()
+	c.localOnly = v
+	c.mu.Unlock()
+}
+
+func (c *Config) LocalOnly() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.localOnly
+}
+
+// BindHost is the interface to listen on: HOSTNAME_BIND / ROUTER_GO_ADDR win, then the localOnly setting, else all interfaces ("").
+func (c *Config) BindHost() string {
+	if c.Host != "" {
+		return c.Host
+	}
+	if c.LocalOnly() {
+		return "127.0.0.1" // shortcut: IPv4 loopback only, so http://[::1]:port is refused; upgrade if IPv6-only clients matter
+	}
+	return ""
+}
+
 // Addr is the listen address for the current port.
 func (c *Config) Addr() string {
 	p, _ := c.PortInfo()
-	return net.JoinHostPort(c.Host, strconv.Itoa(p))
+	return net.JoinHostPort(c.BindHost(), strconv.Itoa(p))
 }
 
 // ValidPort accepts 1-65535.

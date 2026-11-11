@@ -23,7 +23,7 @@ The "Phase" column refers to [`PRD.md`](./PRD.md) §4. **Last updated: 2026-11-0
 - [x] Password login (bcrypt, `settings.password`, `INITIAL_PASSWORD`) — F1
 - [x] JWT cookie `auth_token` (HS256, 24 hours, secret file/env) — F1
 - [x] Login limiter per IP — F1
-- [x] Handling of default password from remote (mustChangePassword) — F1
+- [~] Handling of default password from remote (mustChangePassword) — F1 _(deliberately not carried over: default password works remotely; use Settings → Local only)_
 - [x] `requireLogin` toggle + `/api/*` guard — F1
 - [x] Change password (`PATCH /api/settings`) — F1
 - [x] Reset password (CLI flag) — F1
@@ -160,6 +160,8 @@ The "Phase" column refers to [`PRD.md`](./PRD.md) §4. **Last updated: 2026-11-0
 - [x] Go live reload with Air (`.air.toml`, `make dev`) — F2c
 - [x] Graceful shutdown — F1
 - [x] Configurable port: `--port`, env, Settings (switches immediately), default 20128 — F2c
+- [x] Bind address: all interfaces by default, Settings → Local only (switches immediately), `--remove-localhost-only` to undo from the console — Router-Go only
+- [~] Backup / restore to JSON (Settings; `GET /api/backup`, `POST /api/restore`) — Router-Go only _(config tables only; usage history is not included; XRouter-Next export files are not read)_
 - [ ] Dockerfile / docker-compose — F2
 - [ ] CLI launcher (`start/stop/status`, daemon) — F6
 - [ ] Tray, autostart, updater — F6

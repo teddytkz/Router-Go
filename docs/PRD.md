@@ -30,6 +30,8 @@ XRouter-Next is a local AI gateway: a single OpenAI-compatible endpoint (`/v1/*`
 | Frontend | React 19 + TypeScript + Vite + **TanStack Query** + Tailwind v4 + react-router | As requested |
 | Embed | `//go:embed web/dist`, SPA fallback to `index.html`, hashed assets `immutable` | Single binary |
 | Data location | `~/.router-go` (Linux/macOS), `%USERPROFILE%\.router-go` (Windows). Override: `ROUTER_GO_DATA_DIR` / `DATA_DIR`. DB: `<data>/db/data.sqlite` | As requested |
+| Backup | `GET /api/backup` downloads `{format:"router-go-backup",version:1,tables}` (settings, providerConnections, providerNodes, proxyPools, apiKeys, combos, kv; no usage tables). `POST /api/restore` (JSON only) replaces every table present in the file in one transaction and keeps this machine's `port` / `localOnly` | Move a setup between machines; the file holds secrets in clear text |
+| Bind | All interfaces by default. **Settings → Local only** (`settings.localOnly`) binds `127.0.0.1` and applies live; `HOSTNAME_BIND` / `ROUTER_GO_ADDR` win over it | Local-only is opt-in |
 | Port | Default `20128` (same as XRouter-Next). Priority: `--port` > env `PORT`/`ROUTER_GO_ADDR` > `settings.port` > default. Changing it from Settings moves the listener live (the new port is bound first; port in use → 409, the old listener is closed after 1 s) | Existing clients keep working |
 
 ### Repo structure
@@ -96,7 +98,7 @@ Design: collapsible sidebar, dark/light theme following the OS + toggle, neutral
 - Secret: `JWT_SECRET` env or the file `<data>/jwt-secret` (0600). Cookie `HttpOnly`, `SameSite=Lax`, `Secure` when `X-Forwarded-Proto=https` or `AUTH_COOKIE_SECURE=true`.
 - Login limiter: 5 failures → progressive lock per IP; the IP is taken from the TCP connection (the `X-Forwarded-For` header is trusted only from loopback).
 - The upstream `apiKey` is never sent back to the UI in full (masked).
-- The default password `123456` may only be used from localhost; from remote, login is rejected until the password is changed / a strong `INITIAL_PASSWORD` is set (mimicking Next's behavior).
+- The default password `123456` (or `INITIAL_PASSWORD`) is accepted from any machine; this deliberately differs from XRouter-Next, which refuses it remotely. Exposure is limited by the bind address instead: all interfaces by default, 127.0.0.1 with the **Local only** setting.
 
 ### 3.4 Data model (compatible)
 
@@ -212,6 +214,7 @@ Unlike `/api/quota` (user-made limits, unchanged): this is the quota the provide
 | XRouter-Next is very large (37 executors, 40+ translators) | Incremental port, explicit checklist, each phase can be released |
 | SSE streaming leaks/buffers | Integration tests with a mock upstream, `http.Flusher`, context cancel |
 | Lockout/login limit → locked out | Reset via `router-go --reset-password` (deletes `settings.password`) |
+| Local only cut off a remote session | `router-go --remove-localhost-only` (sets `settings.localOnly=false`; run it on the machine, then start again) |
 
 ### Proxy pools (done)
 - A pool = a regular proxy (`http(s)://`, `socks5://`) or a relay that the user deploys to Vercel (Edge function) / Cloudflare (Worker) using an API token (used once, not stored).

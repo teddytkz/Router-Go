@@ -28,6 +28,7 @@ import (
 func main() {
 	version := flag.Bool("version", false, "print version and exit")
 	resetPW := flag.Bool("reset-password", false, "remove the stored dashboard password (falls back to INITIAL_PASSWORD) and exit")
+	unlock := flag.Bool("remove-localhost-only", false, "turn off Settings → Local only (listen on all interfaces again) and exit; use it when Local only locked you out")
 	port := flag.Int("port", 0, "listen port (default 20128, or the port saved in Settings); overrides the PORT env var and the saved setting")
 	flag.Parse()
 	if *version {
@@ -49,7 +50,15 @@ func main() {
 		if err := store.UpdateSettings(map[string]any{"password": nil}); err != nil {
 			log.Fatalf("reset-password: %v", err)
 		}
-		fmt.Println("dashboard password reset; log in with INITIAL_PASSWORD (default 123456) from this machine")
+		fmt.Println("dashboard password reset; log in with INITIAL_PASSWORD (default 123456)")
+		return
+	}
+
+	if *unlock {
+		if err := store.UpdateSettings(map[string]any{"localOnly": false}); err != nil {
+			log.Fatalf("remove-localhost-only: %v", err)
+		}
+		fmt.Println("Local only is off; the next start listens on all interfaces (HOSTNAME_BIND / ROUTER_GO_ADDR still win if set)")
 		return
 	}
 
@@ -58,6 +67,8 @@ func main() {
 		if f, ok := s["port"].(float64); ok {
 			saved = int(f)
 		}
+		lo, _ := s["localOnly"].(bool)
+		cfg.SetLocalOnly(lo)
 	}
 	if err := cfg.ResolvePort(*port, saved); err != nil {
 		log.Fatalf("config: %v", err)
@@ -72,6 +83,7 @@ func main() {
 	go gateway.New(store).RunBackgroundRefresh(bg) // renews OAuth sign-ins before they expire
 	var mu sync.Mutex
 	var current *http.Server
+	var curLn net.Listener
 	// start serves handler on ln; the previous server (if any) is drained in the background.
 	start := func(ln net.Listener) {
 		srv := &http.Server{
@@ -81,10 +93,10 @@ func main() {
 		}
 		mu.Lock()
 		old := current
-		current = srv
+		current, curLn = srv, ln
 		mu.Unlock()
 		go func() {
-			if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
 				log.Fatalf("server: %v", err)
 			}
 		}()
@@ -97,8 +109,24 @@ func main() {
 			}()
 		}
 	}
+	// Rebind listens on cfg.BindHost():p, so it also applies a changed "Local only" setting.
 	cfg.Rebind = func(p int) error {
-		ln, err := net.Listen("tcp", net.JoinHostPort(cfg.Host, strconv.Itoa(p)))
+		addr := net.JoinHostPort(cfg.BindHost(), strconv.Itoa(p))
+		ln, err := net.Listen("tcp", addr)
+		mu.Lock()
+		prev := curLn
+		mu.Unlock()
+		if err != nil && prev != nil && prev.Addr().(*net.TCPAddr).Port == p {
+			// same port on another interface: the old socket blocks it, so free it first (in-flight requests keep running)
+			prevAddr := prev.Addr().String()
+			_ = prev.Close()
+			if ln, err = net.Listen("tcp", addr); err != nil {
+				if back, e := net.Listen("tcp", prevAddr); e == nil {
+					start(back)
+				}
+				return err
+			}
+		}
 		if err != nil {
 			return err
 		}

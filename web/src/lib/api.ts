@@ -29,7 +29,7 @@ export type AuthStatus = { requireLogin: boolean; authenticated: boolean; hasPas
 export type Settings = {
   requireLogin: boolean; requireApiKey: boolean; hasPassword: boolean;
   dataDir: string; version: string; machineId: string;
-  port?: number; activePort: number; defaultPort: number; portSource: "flag" | "env" | "settings" | "default";
+  port?: number; localOnly: boolean; hostFromEnv: boolean; bindHost: string; activePort: number; defaultPort: number; portSource: "flag" | "env" | "settings" | "default";
   ponytailEnabled?: boolean; ponytailLevel?: "lite" | "full" | "ultra"; watermarksRemoverEnabled?: boolean;
   loopGuardEnabled?: boolean; circuitBreakerEnabled?: boolean; semaphoreEnabled?: boolean;
   customPromptEnabled?: boolean; customPrompt?: string;

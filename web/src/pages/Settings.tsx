@@ -1,5 +1,7 @@
-import { useState } from "react";
-import { Button, Card, errText, Field, Input, PageHeader, Skeleton, Switch, useToast } from "../components/ui";
+import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Button, Card, ConfirmModal, errText, Field, Input, PageHeader, Skeleton, Switch, useToast } from "../components/ui";
+import { api } from "../lib/api";
 import type { Settings } from "../lib/api";
 import { useSettings, useUpdateSettings } from "../lib/hooks";
 
@@ -46,6 +48,41 @@ function PortCard({ d }: { d: Settings }) {
   );
 }
 
+function BackupCard() {
+  const toast = useToast(), qc = useQueryClient(), pick = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<{ name: string; data: unknown } | null>(null), [busy, setBusy] = useState(false);
+  const choose = async (f?: File) => {
+    if (!f) return;
+    try { setFile({ name: f.name, data: JSON.parse(await f.text()) }); } catch { toast("err", "That file is not valid JSON"); }
+    if (pick.current) pick.current.value = ""; // the same file can be chosen again
+  };
+  const restore = async () => {
+    setBusy(true);
+    try {
+      await api("/api/restore", { method: "POST", json: file!.data });
+      toast("ok", "Backup restored");
+      setFile(null);
+      qc.invalidateQueries();
+    } catch (e) { toast("err", errText(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Card className="p-4 mb-4">
+      <h2 className="font-semibold">Backup &amp; restore</h2>
+      <p className="text-muted text-[13px] mt-1 mb-3 max-w-2xl">
+        Providers, keys, combos, models, proxy pools and settings as one JSON file. It contains your upstream keys, OAuth tokens, gateway keys and the password hash in clear text, so keep it private.
+        Usage history, and this machine's port and Local only setting, are not included.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" onClick={() => { location.href = "/api/backup"; /* attachment: the page stays */ }}>Download backup</Button>
+        <Button type="button" onClick={() => pick.current?.click()}>Restore from file…</Button>
+        <input ref={pick} type="file" accept="application/json,.json" className="sr-only" aria-label="Backup file to restore" tabIndex={-1} onChange={(e) => choose(e.target.files?.[0])} />
+      </div>
+      <ConfirmModal open={!!file} onClose={() => setFile(null)} onConfirm={restore} loading={busy} confirmLabel="Restore" title="Restore this backup?"
+        body={`${file?.name ?? ""} replaces your current providers, keys, combos, models, proxy pools and settings (including the password). This cannot be undone: download a backup first if you may need the current setup.`} />
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const s = useSettings(), upd = useUpdateSettings(), toast = useToast();
   const [cur, setCur] = useState(""), [next, setNext] = useState("");
@@ -59,8 +96,14 @@ export default function SettingsPage() {
         <Row title="Require login" body="Protect the dashboard with the password. Turning this off exposes the dashboard API to anyone who can reach this port.">
           <Switch checked={d.requireLogin} label="Require login" disabled={upd.isPending} onChange={(v) => set({ requireLogin: v }, "Saved")} />
         </Row>
+        <Row title="Local only" body={d.hostFromEnv
+          ? `HOSTNAME_BIND / ROUTER_GO_ADDR fixes the bind address to ${d.bindHost}, so this only applies when you start without it.`
+          : "Listen on 127.0.0.1 only, so other machines cannot reach the dashboard or the API. Off (default) listens on all interfaces. Turning it on from a remote browser cuts that browser off."}>
+          <Switch checked={d.localOnly} label="Local only" disabled={upd.isPending} onChange={(v) => set({ localOnly: v }, v ? "Listening on 127.0.0.1 only" : "Listening on all interfaces")} />
+        </Row>
       </Card>
       <PortCard d={d} />
+      <BackupCard />
       <Card className="p-4 mb-4">
         <h2 className="font-semibold mb-3">Change password</h2>
         <form className="grid sm:grid-cols-2 gap-4 max-w-2xl" onSubmit={(e) => { e.preventDefault(); upd.mutate({ currentPassword: cur, newPassword: next }, { onSuccess: () => { toast("ok", "Password changed"); setCur(""); setNext(""); }, onError: (er) => toast("err", errText(er)) }); }}>

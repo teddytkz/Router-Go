@@ -30,4 +30,16 @@ func TestResolvePortPrecedence(t *testing.T) {
 	if got := (&Config{Host: "127.0.0.1", port: 8080}).Addr(); got != "127.0.0.1:8080" {
 		t.Errorf("Addr = %s", got)
 	}
+	c := &Config{port: 8080}
+	if got := c.Addr(); got != ":8080" {
+		t.Errorf("default must bind all interfaces, got %s", got)
+	}
+	c.SetLocalOnly(true)
+	if got := c.Addr(); got != "127.0.0.1:8080" {
+		t.Errorf("local only = %s", got)
+	}
+	c.Host = "10.0.0.5" // HOSTNAME_BIND wins over the setting
+	if got := c.Addr(); got != "10.0.0.5:8080" {
+		t.Errorf("env host = %s", got)
+	}
 }
