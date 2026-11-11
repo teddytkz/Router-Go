@@ -1,7 +1,7 @@
 // TanStack Query hooks. Query keys are grouped so a mutation can invalidate exactly what it changed.
 import { useCallback, useMemo } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type ActiveRequest, type ApiKey, type AuthStatus, type BuiltinProvider, type Combo, type ComboStrategy, type Connection, type CustomModel, type LiveUsage, type KeyAccess, type ModelCapsOverride, type ModelTestResult, type NodeModels, type NodeType, type ProviderNode, type ProxyPool, type ProxyPoolBody, type QuotaBody, type QuotaData, type RoutingHealthRow, type SysSnapshot, type TestBatch, type Settings, type Stats, type UsagePeriod, type UsageRow, type UsageSummary, type ValidateResult } from "./api";
+import { api, ApiError, type ActiveRequest, type ApiKey, type AuthStatus, type BuiltinProvider, type Combo, type ComboStrategy, type Connection, type CustomModel, type LiveUsage, type KeyAccess, type ModelCapsOverride, type ModelTestResult, type NodeModels, type NodeType, type ProviderNode, type ProxyPool, type ProxyPoolBody, type QuotaBody, type QuotaData, type SysSnapshot, type TestBatch, type Settings, type Stats, type UsagePeriod, type UsageRow, type UsageSummary, type ValidateResult } from "./api";
 
 export const useAuthStatus = () => useQuery({ queryKey: ["auth"], queryFn: () => api<AuthStatus>("/api/auth/status"), staleTime: 30_000 });
 export const useSettings = () => useQuery({ queryKey: ["settings"], queryFn: () => api<Settings>("/api/settings") });
@@ -30,8 +30,6 @@ export function useProvider(id?: string) {
   const found = provider ? ({ kind: "builtin", provider } as const) : node ? ({ kind: "custom", node } as const) : undefined;
   return { data: found, isLoading: !found && (b.isLoading || n.isLoading) };
 }
-export const useRoutingHealth = () =>
-  useQuery({ queryKey: ["health", "routing"], queryFn: () => api<{ providers: RoutingHealthRow[] }>("/api/health/routing").then((r) => r.providers), refetchInterval: 5_000, retry: false });
 export const useConnections = () => useQuery({ queryKey: ["connections"], queryFn: () => api<{ connections: Connection[] }>("/api/providers").then((r) => r.connections) });
 export const useStats = (hours = 24) => useQuery({ queryKey: ["usage", "stats", hours], queryFn: () => api<Stats>(`/api/usage/stats?hours=${hours}`), refetchInterval: 15_000 });
 export const useNodeModels = (id: string | null) =>

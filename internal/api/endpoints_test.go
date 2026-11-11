@@ -398,3 +398,32 @@ func TestOllamaChat(t *testing.T) {
 		t.Errorf("upstream 400 = %d", st)
 	}
 }
+
+func TestKeyTokenLimit(t *testing.T) {
+	e := newEnv(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, chatAnswer) // 3 prompt + 1 completion = 4 tokens
+	}, "chat")
+	e.addKey("one", "k1")
+	body := `{"model":"mock/m","messages":[{"role":"user","content":"hi"}]}`
+	limited, _ := e.store.CreateAPIKey("l", "0123456789abcdef", "sk-limited-0000000", db.Access{MaxTokens: 5})
+	free, _ := e.store.CreateAPIKey("f", "0123456789abcdef", "sk-unlimited-00000", db.Access{})
+	for i, want := range []int{200, 200, 429, 429} { // 4 < 5 passes, 8 >= 5 stops; the check runs before the call
+		if st, out := e.call("POST", "/v1/chat/completions", body, "Authorization", "Bearer "+limited.Key); st != want {
+			t.Errorf("limited call %d = %d, want %d: %s", i, st, want, out)
+		} else if want == 429 && !strings.Contains(out, "token_limit_exceeded") {
+			t.Errorf("429 body: %s", out)
+		}
+	}
+	for i := 0; i < 3; i++ {
+		if st, out := e.call("POST", "/v1/chat/completions", body, "Authorization", "Bearer "+free.Key); st != 200 {
+			t.Errorf("unlimited call %d = %d: %s", i, st, out)
+		}
+	}
+	if ks, _ := e.store.APIKeys(); len(ks) == 0 {
+		t.Fatal("no keys")
+	}
+	if _, err := e.store.CreateAPIKey("n", "0123456789abcdef", "sk-negative-000000", db.Access{MaxTokens: -1}); err == nil {
+		t.Error("negative limit accepted")
+	}
+}

@@ -1,7 +1,8 @@
-import { Eye, EyeOff, KeyRound, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Eye, EyeOff, Gauge, KeyRound, ListChecks, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Badge, Button, Card, ConfirmModal, CopyButton, EmptyState, errText, fmtTime, Input, Modal, PageHeader, Skeleton, Switch, useToast, Field } from "../components/ui";
-import { ModelListEditor } from "../components/ModelListEditor";
+import { fmtTokens, parseTokens } from "../components/CapBadges";
+import { ModelPicker, type PickGroup } from "../components/ModelPicker";
 import type { ApiKey } from "../lib/api";
 import { useAliases, useAllModels, useCombos, useCreateKey, useDeleteKey, useEditKey, useKeys, useNodes, useAllNodes, useSettings, useToggleKey, useUpdateKeyAccess, useUpdateSettings } from "../lib/hooks";
 
@@ -9,22 +10,58 @@ function AccessModal({ k, onClose }: { k: ApiKey; onClose: () => void }) {
   const toast = useToast(), save = useUpdateKeyAccess();
   const nodes = useAllNodes(), models = useAllModels(nodes.data), combos = useCombos(), aliases = useAliases();
   const [restricted, setRestricted] = useState(k.access?.restricted ?? false), [allow, setAllow] = useState(k.access?.allow ?? []);
-  const options = [...(combos.data?.map((c) => c.name) ?? []), ...Object.keys(aliases.data ?? {}), ...(models.data ?? [])];
+  const [max, setMax] = useState(String(k.access?.maxTokens ?? 0)), [picking, setPicking] = useState(false), [draft, setDraft] = useState<string[]>([]);
+  const maxTokens = parseTokens(max);
+
+  // same grouping as the combo picker, plus the combos themselves (a key may be allowed a combo by name)
+  const groups = useMemo<PickGroup[]>(() => {
+    const byPrefix = new Map<string, string[]>();
+    for (const m of models.data ?? []) { const p = m.slice(0, m.indexOf("/")); byPrefix.set(p, [...(byPrefix.get(p) ?? []), m]); }
+    const out: PickGroup[] = [...byPrefix].map(([prefix, ms]) => ({ key: prefix, label: nodes.data?.find((n) => n.prefix === prefix)?.name ?? prefix, models: ms }));
+    const cs = combos.data?.map((c) => c.name) ?? [], al = Object.keys(aliases.data ?? {});
+    return [...(cs.length ? [{ key: "__combos", label: "Combos", models: cs }] : []), ...out, ...(al.length ? [{ key: "__aliases", label: "Aliases", models: al }] : [])];
+  }, [models.data, nodes.data, combos.data, aliases.data]);
+
+  if (picking) {
+    return (
+      <Modal open onClose={() => setPicking(false)} title="Select models"
+        footer={<><Button onClick={() => setPicking(false)}>Back</Button><Button variant="primary" onClick={() => { setAllow(draft); setPicking(false); }}>Apply · {draft.length} selected</Button></>}>
+        <p className="text-[13px] text-muted -mt-1">Tick the models and combos this key may call.</p>
+        <ModelPicker groups={groups} selected={draft} onChange={setDraft} />
+      </Modal>
+    );
+  }
   return (
     <Modal open onClose={onClose} title={`Model access · ${k.name}`}
       footer={<><Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" loading={save.isPending}           onClick={() => save.mutate({ id: k.id, access: { restricted, allow } }, { onSuccess: () => { toast("ok", "Access updated"); onClose(); }, onError: (e) => toast("err", errText(e)) })}>Save</Button></>}>
+        <Button variant="primary" loading={save.isPending} disabled={maxTokens === null}
+          onClick={() => save.mutate({ id: k.id, access: { restricted, allow, maxTokens: maxTokens ?? 0 } }, { onSuccess: () => { toast("ok", "Access updated"); onClose(); }, onError: (e) => toast("err", errText(e)) })}>Save</Button></>}>
       <div className="flex items-center justify-between gap-4">
         <div><div className="font-medium">Restrict to specific models</div><p className="text-xs text-muted">Off: this key can use every model and combo.</p></div>
         <Switch checked={restricted} onChange={setRestricted} label="Restrict models" />
       </div>
       {restricted && (
-        <div className="space-y-1.5">
-          <div className="text-[13px] font-medium">Allowed models and combos <span className="text-muted font-normal">· {allow.length}/200</span></div>
-          <ModelListEditor value={allow} onChange={setAllow} options={options} max={200} label="Add allowed model" />
-          {!allow.length && <p className="text-xs text-warn">With an empty list this key cannot call any model.</p>}
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-[13px] font-medium">Allowed models and combos <span className="text-muted font-normal">· {allow.length}/200</span></div>
+            <Button size="sm" onClick={() => { setDraft(allow); setPicking(true); }}><ListChecks className="size-4" />Select models</Button>
+          </div>
+          {allow.length ? (
+            <ul className="rounded-lg border border-border divide-y divide-border max-h-64 overflow-y-auto">
+              {allow.map((m) => (
+                <li key={m} className="flex items-center gap-1 pl-3 pr-1 h-9">
+                  <span className="font-mono text-[13px] flex-1 truncate" title={m}>{m}</span>
+                  <Button size="sm" variant="ghost" aria-label={`Remove ${m}`} onClick={() => setAllow(allow.filter((x) => x !== m))}><X className="size-4" /></Button>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="text-xs text-warn">With an empty list this key cannot call any model.</p>}
         </div>
       )}
+      <Field label="Max tokens" error={maxTokens === null ? "Enter a number like 500000, 500k or 2m" : undefined}
+        hint={`Total prompt + completion tokens this key may use. 0 = unlimited. Used so far: ${fmtTokens(k.usedTokens ?? 0)}. Past the limit, requests get 429.`}>
+        {(id) => <Input id={id} inputMode="numeric" className="font-mono" value={max} onChange={(e) => setMax(e.target.value)} placeholder="0" />}
+      </Field>
     </Modal>
   );
 }
@@ -46,23 +83,29 @@ function EditModal({ k, onClose }: { k: ApiKey; onClose: () => void }) {
 function KeyRow({ k }: { k: ApiKey }) {
   const toast = useToast(), toggle = useToggleKey(), del = useDeleteKey();
   const [show, setShow] = useState(false), [confirm, setConfirm] = useState(false), [access, setAccess] = useState(false), [edit, setEdit] = useState(false);
-  const restricted = k.access?.restricted;
+  const restricted = k.access?.restricted, max = k.access?.maxTokens ?? 0;
   const shown = show ? k.key : k.key.slice(0, 7) + "•".repeat(14) + k.key.slice(-4);
   return (
     <li className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
       <div className="min-w-0 flex-1 basis-56">
         <div className="font-medium">{k.name}</div>
-        <div className="font-mono text-xs text-muted break-all">{shown}</div>
+        <div className="flex flex-wrap items-baseline gap-x-3 text-xs text-muted">
+          <span className="font-mono break-all">{shown}</span>
+          <span className="border-l border-border pl-3">{fmtTime(k.createdAt)}</span>
+        </div>
       </div>
       <button type="button" onClick={() => setAccess(true)} aria-label={`Edit model access for ${k.name}`} className="cursor-pointer">
         <Badge tone={restricted ? "warn" : "neutral"}><ShieldCheck className="size-3" />{restricted ? `${k.access!.allow.length} allowed` : "All models"}</Badge>
+        <Badge className="ml-1.5"><Gauge className="size-3" />{max ? `${fmtTokens(k.usedTokens ?? 0)} / ${fmtTokens(max)}` : "Unlimited"}</Badge>
       </button>
-      <span className="text-xs text-muted hidden sm:block">{fmtTime(k.createdAt)}</span>
-      <Button size="sm" variant="ghost" onClick={() => setShow((s) => !s)} aria-label={show ? "Hide key" : "Reveal key"}>{show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</Button>
-      <CopyButton value={k.key} label="Copy key" />
-      <Button size="sm" variant="ghost" aria-label={`Edit ${k.name}`} onClick={() => setEdit(true)}><Pencil className="size-4" /></Button>
-      <Switch checked={k.isActive} label={`${k.name} enabled`} onChange={(v) => toggle.mutate({ id: k.id, isActive: v }, { onError: (e) => toast("err", errText(e)) })} />
-      <Button size="sm" variant="ghost" aria-label={`Delete ${k.name}`} onClick={() => setConfirm(true)}><Trash2 className="size-4" /></Button>
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        <Switch checked={k.isActive} label={`${k.name} enabled`} disabled={toggle.isPending} onChange={(v) => toggle.mutate({ id: k.id, isActive: v }, { onError: (e) => toast("err", errText(e)) })} />
+        <span aria-hidden className="mx-2 h-5 w-px bg-border" />
+        <Button size="sm" variant="ghost" onClick={() => setShow((s) => !s)} aria-label={show ? `Hide ${k.name}` : `Reveal ${k.name}`}>{show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</Button>
+        <CopyButton value={k.key} label={`Copy ${k.name}`} />
+        <Button size="sm" variant="ghost" aria-label={`Edit ${k.name}`} onClick={() => setEdit(true)}><Pencil className="size-4" /></Button>
+        <Button size="sm" variant="ghost" className="hover:text-err" aria-label={`Delete ${k.name}`} onClick={() => setConfirm(true)}><Trash2 className="size-4" /></Button>
+      </div>
       {edit && <EditModal k={k} onClose={() => setEdit(false)} />}
       {access && <AccessModal k={k} onClose={() => setAccess(false)} />}
       <ConfirmModal open={confirm} onClose={() => setConfirm(false)} loading={del.isPending} title="Delete API key" body={`Clients using "${k.name}" will immediately get 401.`}

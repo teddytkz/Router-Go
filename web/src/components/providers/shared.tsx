@@ -1,5 +1,4 @@
 // Helpers shared by the providers list and detail pages: connection status, badges, initials tile.
-import type { CSSProperties } from "react";
 import type { Connection, ProviderNode } from "../../lib/api";
 import { Network } from "lucide-react";
 import { useProxyPools } from "../../lib/hooks";
@@ -45,11 +44,9 @@ export function TypeBadge({ node }: { node: ProviderNode }) {
   return <Badge tone={isAnthropic(node) ? "warn" : "ok"}>{typeLabel(node)}</Badge>;
 }
 
-/** Coloured initials tile: OC (green) for OpenAI-compatible, AC (orange) for Anthropic-compatible. Tokens only. */
-export function InitialsTile({ node, className = "size-10 text-sm" }: { node: ProviderNode; className?: string }) {
-  const c = isAnthropic(node) ? "var(--warn)" : "var(--ok)";
-  const style: CSSProperties = { color: c, background: `color-mix(in srgb, ${c} 16%, var(--surface))`, borderColor: `color-mix(in srgb, ${c} 30%, var(--surface))` };
-  return <div aria-hidden style={style} className={`grid shrink-0 place-items-center rounded-xl border font-semibold ${className}`}>{isAnthropic(node) ? "AC" : "OC"}</div>;
+/** Vendor logo for a custom provider: OpenAI for OpenAI-compatible, Anthropic for Anthropic-compatible. */
+export function NodeIcon({ node, className = "size-10" }: { node: ProviderNode; className?: string }) {
+  return <img src={`/providers/${isAnthropic(node) ? "anthropic" : "openai"}.svg`} alt="" aria-hidden className={`shrink-0 rounded-xl object-cover ${className}`} />;
 }
 
 export const Dot = ({ tone }: { tone: "ok" | "err" | "warn" | "muted" }) => (

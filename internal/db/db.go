@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -33,6 +34,13 @@ func Open(path string) (*Store, error) {
 	s := &Store{DB: d}
 	for _, stmt := range schemaStatements {
 		if _, err := d.Exec(stmt); err != nil {
+			d.Close()
+			return nil, err
+		}
+	}
+	// Router-Go additions to apiKeys; extra columns are ignored by XRouter-Next. ALTER has no IF NOT EXISTS, so a duplicate-column error means "already there".
+	for _, col := range []string{"maxTokens", "usedTokens"} {
+		if _, err := d.Exec(`ALTER TABLE apiKeys ADD COLUMN ` + col + ` INTEGER DEFAULT 0`); err != nil && !strings.Contains(err.Error(), "duplicate column") {
 			d.Close()
 			return nil, err
 		}

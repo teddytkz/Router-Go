@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { AddKeyModal, ConnectionsCard } from "../components/providers/ConnectionsCard";
 import { ModelsCard } from "../components/providers/ModelsCard";
 import { NodeModal } from "../components/providers/NodeModal";
-import { apiLabel, endpointPath, InitialsTile, isAnthropic, TypeBadge } from "../components/providers/shared";
+import { apiLabel, endpointPath, NodeIcon, isAnthropic, TypeBadge } from "../components/providers/shared";
 import { Button, Card, ConfirmModal, EmptyState, errText, Skeleton, useToast } from "../components/ui";
 import type { ProviderNode } from "../lib/api";
 import { BuiltinDetail } from "../components/providers/Builtin";
@@ -33,7 +33,7 @@ function CustomDetail({ node }: { node: ProviderNode }) {
       <div>
         {back}
         <div className="flex items-center gap-4">
-          <InitialsTile node={node} className="size-12 text-base" />
+          <NodeIcon node={node} className="size-12" />
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight break-words">{node.name}</h1>
             <p className="text-muted mt-0.5">{n} connection{n === 1 ? "" : "s"}</p>

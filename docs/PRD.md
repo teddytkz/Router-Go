@@ -104,7 +104,7 @@ Design: collapsible sidebar, dark/light theme following the OS + toggle, neutral
 
 - `providerNodes(id, type, name, data{prefix,apiType,baseUrl}, createdAt, updatedAt)` — `id = "openai-compatible-{apiType}-{uuid}"`, `type="openai-compatible"`.
 - `providerConnections(id, provider=<node id>, authType="apikey", name, priority, isActive, data{apiKey, providerSpecificData{prefix,apiType,baseUrl,nodeName}, testStatus, lastError, lastErrorAt, errorCode, rateLimitedUntil, backoffLevel,…})`.
-- `apiKeys(id, key, name, machineId, isActive, createdAt, accessRestricted, accessAllow)`.
+- `apiKeys(id, key, name, machineId, isActive, createdAt, accessRestricted, accessAllow)` plus two Router-Go columns added by an idempotent `ALTER` in `db.Open`: `maxTokens`, `usedTokens` (XRouter-Next ignores them).
 - `settings(id=1, data JSON)` — `password`, `requireLogin`, `requireApiKey`, etc.
 - `usageHistory`, `kv`.
 - Other tables from the XRouter-Next schema are created empty so the DB can be opened back by Next.
@@ -145,9 +145,10 @@ Continuation of phase 1 (requested right after phase 1). The specification here 
 - Custom models are used for upstreams that do not expose `/models`; they appear in `/v1/models` and the dashboard model list (merged, without duplicates).
 
 ### Per-key access list
+- **Token limit**: `access.maxTokens` (total prompt+completion tokens, `0` = unlimited) is checked on `/v1` chat-style requests (`proxy.go`) after the model-access check; when `usedTokens >= maxTokens` the key gets `429` `token_limit_exceeded`. `usedTokens` is a counter bumped after each request. Limits: the check runs before the call, so in-flight requests can overshoot; there is no reset (raise the limit to continue); other endpoints (embeddings, videos, ...) are not counted or checked yet.
 - Columns `apiKeys.accessRestricted` / `accessAllow` (JSON array). Unrestricted by default. A *restricted* key may only call the combos/models in the allow list (exact match, case-insensitive, on the **resolved** identity `nodeId/model`; an alias and a prefix that resolve the same are treated as one target; an allowed combo grants its members only when reached through that combo).
 - Fail-closed: a corrupt allow list → nothing is allowed. Rejection = `403` `This API key is not allowed to use model "<requested>"` before any upstream credentials are touched. `/v1/models` is filtered according to the allow list.
-- API: key items in `GET/POST /api/keys` include `access:{restricted,allow[]}`; `POST /api/keys` may accept `access`; `PATCH /api/keys/{id}` accepts `access` (validation: object `{restricted:bool,allow:string[]}`, ≤200 entries, ≤256 characters/entry; invalid → 400).
+- API: key items in `GET/POST /api/keys` include `access:{restricted,allow[],maxTokens}` and `usedTokens`; `POST /api/keys` may accept `access`; `PATCH /api/keys/{id}` accepts `access` (validation: object `{restricted:bool,allow:string[],maxTokens:int>=0}`, ≤200 entries, ≤256 characters/entry; invalid → 400).
 
 ### Outside phase 2a (still phase 2b+)
 pricing, Gemini `/v1beta`, `/v1/messages/count_tokens`, round-robin across *connections* (account semaphore), capability auto-switch, smart/fusion combo, Dockerfile.

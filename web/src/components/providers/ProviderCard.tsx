@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import type { Connection, ProviderNode } from "../../lib/api";
 import { useToggleConnections } from "../../lib/hooks";
 import { errText, Switch, useToast } from "../ui";
-import { InitialsTile, StatusLine, summarize } from "./shared";
+import { NodeIcon, StatusLine, summarize } from "./shared";
 
 /** Compact list card: tile, name, one status line; hover reveals the enable/disable switch. */
 export function ProviderCard({ node, conns, now }: { node: ProviderNode; conns: Connection[]; now: number }) {
@@ -14,7 +14,7 @@ export function ProviderCard({ node, conns, now }: { node: ProviderNode; conns: 
   return (
     <div className="group relative rounded-xl border border-border bg-surface shadow-[var(--shadow)] transition-colors hover:border-accent/50">
       <Link to={`/dashboard/providers/${node.id}`} className="flex items-center gap-3 px-3 py-2.5 rounded-xl" aria-label={`Open ${node.name}`}>
-        <InitialsTile node={node} className="size-9 text-xs" />
+        <NodeIcon node={node} className="size-9" />
         <div className="min-w-0 flex-1 pr-10">
           <h3 className="font-semibold text-[13px] truncate" title={node.name}>{node.name}</h3>
           <StatusLine s={s} />

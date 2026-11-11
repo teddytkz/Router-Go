@@ -37,8 +37,9 @@ export type Settings = {
 };
 export type CapacityPool = { enabled: boolean; roundRobin: boolean; models: string[] };
 export type CapacityAdapter = { vision?: CapacityPool; audioInput?: CapacityPool };
-export type KeyAccess = { restricted: boolean; allow: string[] };
-export type ApiKey = { id: string; key: string; name: string; isActive: boolean; createdAt: string; access?: KeyAccess };
+// maxTokens: total prompt+completion tokens the key may use, 0 = unlimited.
+export type KeyAccess = { restricted: boolean; allow: string[]; maxTokens?: number };
+export type ApiKey = { id: string; key: string; name: string; isActive: boolean; createdAt: string; access?: KeyAccess; usedTokens?: number };
 export type NodeType = "openai-compatible" | "anthropic-compatible";
 // apiType is absent on anthropic-compatible nodes (upstream is always {baseUrl}/messages).
 export type ProviderNode = { id: string; type: NodeType; name: string; prefix: string; apiType?: "chat" | "responses"; baseUrl: string; createdAt: string };

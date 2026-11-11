@@ -17,12 +17,16 @@ type APIKey struct {
 	IsActive  bool   `json:"isActive"`
 	CreatedAt string `json:"createdAt"`
 	Access    Access `json:"access"`
+	// UsedTokens counts prompt+completion tokens served to this key; it is what Access.MaxTokens is checked against.
+	UsedTokens int64 `json:"usedTokens"`
 }
 
 // Access is the per-key allow list. Restricted keys may only call listed combos/models.
 type Access struct {
 	Restricted bool     `json:"restricted"`
 	Allow      []string `json:"allow"`
+	// MaxTokens is the total prompt+completion tokens the key may use; 0 means unlimited.
+	MaxTokens int64 `json:"maxTokens"`
 }
 
 const (
@@ -46,6 +50,9 @@ func NormalizeAllow(in []string) []string {
 
 // ValidateAccess rejects (never repairs) oversized input and returns the normalised value.
 func ValidateAccess(a Access) (Access, error) {
+	if a.MaxTokens < 0 {
+		return a, errors.New("access.maxTokens must be 0 (unlimited) or more")
+	}
 	if len(a.Allow) > maxAllowEntries {
 		return a, errors.New("access.allow has more than 200 entries")
 	}
@@ -61,19 +68,20 @@ func ValidateAccess(a Access) (Access, error) {
 	return a, nil
 }
 
-const keyCols = `id,key,name,machineId,isActive,createdAt,accessRestricted,accessAllow`
+const keyCols = `id,key,name,machineId,isActive,createdAt,accessRestricted,accessAllow,maxTokens,usedTokens`
 
 func scanKey(sc interface{ Scan(...any) error }) (*APIKey, error) {
 	var k APIKey
 	var name, mid sql.NullString
-	var active, restricted sql.NullInt64
+	var active, restricted, maxTok, usedTok sql.NullInt64
 	var allow sql.NullString
-	if err := sc.Scan(&k.ID, &k.Key, &name, &mid, &active, &k.CreatedAt, &restricted, &allow); err != nil {
+	if err := sc.Scan(&k.ID, &k.Key, &name, &mid, &active, &k.CreatedAt, &restricted, &allow, &maxTok, &usedTok); err != nil {
 		return nil, err
 	}
 	k.Name, k.MachineID, k.IsActive = name.String, mid.String, !active.Valid || active.Int64 != 0
 	// fails closed: an unparsable allow list on a restricted key means "nothing allowed", never "everything"
-	k.Access = Access{Restricted: restricted.Int64 == 1, Allow: []string{}}
+	k.Access = Access{Restricted: restricted.Int64 == 1, Allow: []string{}, MaxTokens: maxTok.Int64}
+	k.UsedTokens = usedTok.Int64
 	if k.Access.Restricted && allow.String != "" {
 		var l []string
 		if json.Unmarshal([]byte(allow.String), &l) == nil {
@@ -107,8 +115,8 @@ func (s *Store) CreateAPIKey(name, machineID, key string, access Access) (*APIKe
 	}
 	k := &APIKey{ID: uuid.NewString(), Key: key, Name: name, MachineID: machineID, IsActive: true, CreatedAt: now(), Access: access}
 	aj, _ := json.Marshal(access.Allow)
-	_, err = s.DB.Exec(`INSERT INTO apiKeys(id,key,name,machineId,isActive,createdAt,accessRestricted,accessAllow) VALUES(?,?,?,?,1,?,?,?)`,
-		k.ID, k.Key, k.Name, k.MachineID, k.CreatedAt, boolInt(access.Restricted), string(aj))
+	_, err = s.DB.Exec(`INSERT INTO apiKeys(id,key,name,machineId,isActive,createdAt,accessRestricted,accessAllow,maxTokens) VALUES(?,?,?,?,1,?,?,?,?)`,
+		k.ID, k.Key, k.Name, k.MachineID, k.CreatedAt, boolInt(access.Restricted), string(aj), access.MaxTokens)
 	return k, err
 }
 
@@ -119,7 +127,7 @@ func (s *Store) SetAPIKeyAccess(id string, access Access) error {
 		return err
 	}
 	aj, _ := json.Marshal(access.Allow)
-	r, err := s.DB.Exec(`UPDATE apiKeys SET accessRestricted=?, accessAllow=? WHERE id=?`, boolInt(access.Restricted), string(aj), id)
+	r, err := s.DB.Exec(`UPDATE apiKeys SET accessRestricted=?, accessAllow=?, maxTokens=? WHERE id=?`, boolInt(access.Restricted), string(aj), access.MaxTokens, id)
 	return affected(r, err)
 }
 
@@ -130,6 +138,14 @@ func (s *Store) APIKeyByValue(key string) *APIKey {
 		return nil
 	}
 	return k
+}
+
+// AddKeyTokens adds served tokens to the key's counter. Concurrent requests may overshoot MaxTokens by what
+// was in flight (shortcut: the check runs before the call, not mid-stream; upgrade by reserving an estimate up front).
+func (s *Store) AddKeyTokens(key string, n int) {
+	if n > 0 {
+		_, _ = s.DB.Exec(`UPDATE apiKeys SET usedTokens=COALESCE(usedTokens,0)+? WHERE key=?`, n, key)
+	}
 }
 
 func (s *Store) SetAPIKeyActive(id string, active bool) error {

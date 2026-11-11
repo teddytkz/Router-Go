@@ -106,6 +106,11 @@ func (g *Gateway) serve(cf string) http.HandlerFunc {
 			return
 		}
 
+		if k := g.Store.APIKeyByValue(key); k != nil && k.Access.MaxTokens > 0 && k.UsedTokens >= k.Access.MaxTokens {
+			fail(429, fmt.Sprintf("This API key has used its token limit (%d of %d).", k.UsedTokens, k.Access.MaxTokens), "token_limit_exceeded")
+			return
+		}
+
 		if !isPass(cf) {
 			hard, soft := requiredCaps(req, cf)
 			targets = g.route(targets, hard, soft, acc, requested, estimateTokens(req))
@@ -127,6 +132,7 @@ func (g *Gateway) serve(cf string) http.HandlerFunc {
 				rec.ConnectionID = o.conn.ID
 			}
 			_ = g.Store.AddUsage(rec)
+			g.Store.AddKeyTokens(key, rec.PromptTokens+rec.CompletionTokens)
 			g.logRequest(strings.ToUpper(cf), requested, rec, o, status)
 		}
 

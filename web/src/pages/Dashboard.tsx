@@ -192,10 +192,10 @@ export default function Dashboard() {
       <PageHeader title="Dashboard" subtitle={`Last ${RANGES.find((r) => r.hours === hours)?.label}`} actions={range} />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
         {!s ? Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[104px]" />) : <>
-          <StatCard icon={<Activity className="size-4" />} color={COLORS.input} label="Total requests" value={fmtNum(s.requests)} sub={s.errors ? `${s.errors} failed` : "no failures"} />
-          <StatCard icon={<ArrowDownToLine className="size-4" />} color={COLORS.input} label="Total input" value={fmtNum(s.promptTokens)} sub="tokens" />
-          <StatCard icon={<ArrowUpFromLine className="size-4" />} color={COLORS.output} label="Total output" value={fmtNum(s.completionTokens)} sub="tokens" />
-          <StatCard icon={<DatabaseZap className="size-4" />} color={COLORS.cache} label="Total cache" value={fmtNum(s.cacheTokens)} sub="cached tokens" />
+          <StatCard icon={<Activity className="size-4" />} color={COLORS.input} label="Total requests" value={fmtFull(s.requests)} sub={s.errors ? `${s.errors} failed` : "no failures"} />
+          <StatCard icon={<ArrowDownToLine className="size-4" />} color={COLORS.input} label="Total input" value={fmtFull(s.promptTokens)} sub="tokens" />
+          <StatCard icon={<DatabaseZap className="size-4" />} color={COLORS.cache} label="Total cache" value={fmtFull(s.cacheTokens)} sub="cached tokens" />
+          <StatCard icon={<ArrowUpFromLine className="size-4" />} color={COLORS.output} label="Total output" value={fmtFull(s.completionTokens)} sub="tokens" />
         </>}
       </div>
       <SystemCards s={system.data} />

@@ -2,7 +2,6 @@ import { Gift, KeyRound, Plug, Plus, ShieldCheck, Zap, type LucideIcon } from "l
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BuiltinCard } from "../components/providers/Builtin";
-import { HealthTiles } from "../components/providers/HealthTiles";
 import { NodeModal } from "../components/providers/NodeModal";
 import { ProviderCard } from "../components/providers/ProviderCard";
 import { TestResultsModal } from "../components/providers/TestResultsModal";
@@ -70,7 +69,6 @@ export default function Providers() {
   return (
     <>
       <PageHeader title="Providers" subtitle="Custom endpoints and built-in providers, with their key pools" />
-      {custom.length > 0 && <HealthTiles />}
       <Section title="Custom Provider" icon={Plug} count={custom.length} loading={customLoading} testing={busy === "custom"} onTest={testFor("custom", custom)}
         empty="No custom providers yet — add any OpenAI- or Anthropic-compatible service (OpenRouter, Ollama, vLLM, …)."
         actions={<>
