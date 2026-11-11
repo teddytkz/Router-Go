@@ -5,6 +5,7 @@ import { useSearchParams } from "react-router-dom";
 import type { BuiltinProvider, Connection } from "../../lib/api";
 import { useBuiltinProviders, useConnections, useDeleteConnection, useLiveUsages, usePatchConnection, useToggleConnections } from "../../lib/hooks";
 import { Button, Card, ConfirmModal, cn, errText, Skeleton, Switch, useToast } from "../ui";
+import { LOGOS } from "../providers/Builtin";
 import { EditKeyModal } from "../providers/ConnectionsCard";
 import { useNow } from "../usage/shared";
 import {
@@ -23,8 +24,10 @@ const kiroMethodLabel = (c: Connection) => KIRO_METHOD_LABELS[c.providerSpecific
 // social/imported flows omit the region; fall back to the profileArn segment (arn:aws:codewhisperer:<region>:...)
 const kiroRegion = (c: Connection) => c.providerSpecificData?.region || c.providerSpecificData?.profileArn?.split(":")[3] || "";
 
-/** Initials tile in place of XRouter's provider logo (Router-Go ships no logo images). */
+/** Provider logo (same set as the Providers page); initials for providers without one or when the image fails. */
 function ProviderTile({ id, name, className = "size-8 text-[11px]" }: { id: string; name: string; className?: string }) {
+  const [broken, setBroken] = useState(false);
+  if (LOGOS.has(id) && !broken) return <img src={`/providers/${id}.png`} alt="" aria-hidden title={name || id} onError={() => setBroken(true)} className={cn("shrink-0 rounded-md object-cover", className)} />;
   return <div aria-hidden title={name || id} className={cn("grid shrink-0 place-items-center rounded-md bg-accent-soft font-semibold uppercase text-accent", className)}>{(name || id).slice(0, 2)}</div>;
 }
 

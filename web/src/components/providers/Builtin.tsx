@@ -14,7 +14,7 @@ import { StatusLine, summarize } from "./shared";
 const TONE = { oauth: "var(--accent)", free: "var(--ok)", apikey: "var(--warn)" } as const;
 
 // Providers with a logo in public/providers/{id}.png (copied from XRouter-Next); every other provider keeps its initials.
-const LOGOS = new Set(["opencode", "freebuff", "codebuddy-intl", "qoder", "cline", "kiro", "tokenharbor"]);
+export const LOGOS = new Set(["opencode", "freebuff", "codebuddy-intl", "qoder", "cline", "kiro", "tokenharbor"]);
 
 function Tile({ p, className = "size-10 text-sm" }: { p: BuiltinProvider; className?: string }) {
   const [broken, setBroken] = useState(false);
