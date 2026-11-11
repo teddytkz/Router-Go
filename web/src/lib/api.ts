@@ -66,10 +66,10 @@ export type Connection = {
   providerSpecificData?: { proxyPoolId?: string; authMethod?: string; region?: string; profileArn?: string };
 };
 export type ProxyPool = {
-  id: string; name: string; type: "http" | "vercel" | "cloudflare" | "postcard"; proxyUrl: string; noProxy: string; isActive: boolean; strictProxy: boolean;
+  id: string; name: string; type: "http" | "vercel" | "cloudflare" | "postcard"; proxyUrl: string; noProxy: string; isActive: boolean; strictProxy: boolean; keyless: boolean;
   testStatus: "unknown" | "active" | "error"; lastTestedAt?: string; lastError?: string; boundConnectionCount: number;
 };
-export type ProxyPoolBody = { name?: string; type?: ProxyPool["type"]; proxyUrl?: string; noProxy?: string; isActive?: boolean; strictProxy?: boolean; relayKey?: string };
+export type ProxyPoolBody = { name?: string; type?: ProxyPool["type"]; proxyUrl?: string; noProxy?: string; isActive?: boolean; strictProxy?: boolean; relayKey?: string; keyless?: boolean };
 export type ValidateResult = { valid: boolean; error?: string; method?: string; models?: string[] };
 export type Stats = {
   requests: number; errors: number; promptTokens: number; completionTokens: number; cacheTokens: number; avgLatencyMs: number;

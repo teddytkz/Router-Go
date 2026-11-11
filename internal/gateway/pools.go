@@ -122,7 +122,9 @@ func relayRequest(req *http.Request, p *db.ProxyPool) *http.Request {
 	out.URL, out.Host = u, u.Host
 	out.Header.Set("x-relay-target", target)
 	out.Header.Set("x-relay-path", path)
-	out.Header.Set("x-relay-key", p.RelayKey)
+	if !p.Keyless {
+		out.Header.Set("x-relay-key", p.RelayKey)
+	}
 	return out
 }
 
@@ -275,8 +277,15 @@ func (g *Gateway) TestPool(ctx context.Context, p *db.ProxyPool) (int, error) {
 		if p.KeepsFingerprint() {
 			return g.testFingerprintRelay(ctx, p)
 		}
-		req, _ = http.NewRequestWithContext(ctx, "GET", p.ProxyURL+"/health", nil)
-		req.Header.Set("x-relay-key", p.RelayKey)
+		if p.Keyless {
+			// no /health and no key on such a relay: ask it to fetch a page, which proves it is up and can forward
+			req, _ = http.NewRequestWithContext(ctx, "GET", p.ProxyURL, nil)
+			req.Header.Set("x-relay-target", "https://example.com")
+			req.Header.Set("x-relay-path", "/")
+		} else {
+			req, _ = http.NewRequestWithContext(ctx, "GET", p.ProxyURL+"/health", nil)
+			req.Header.Set("x-relay-key", p.RelayKey)
+		}
 		client.Transport = g.directTransport()
 	} else {
 		u, err := url.Parse(p.ProxyURL)

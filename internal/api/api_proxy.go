@@ -34,7 +34,7 @@ func (a *API) listProxyPools(w http.ResponseWriter, r *http.Request) {
 // poolView is the API shape: the relay key stays on the server, only its presence is shown.
 func poolView(p *db.ProxyPool, bound int) map[string]any {
 	return map[string]any{"id": p.ID, "name": p.Name, "type": p.Type, "proxyUrl": maskURL(p.ProxyURL), "noProxy": p.NoProxy, "isActive": p.IsActive,
-		"strictProxy": p.StrictProxy, "testStatus": p.TestStatus, "lastTestedAt": p.LastTestedAt, "lastError": p.LastError,
+		"strictProxy": p.StrictProxy, "keyless": p.Keyless, "testStatus": p.TestStatus, "lastTestedAt": p.LastTestedAt, "lastError": p.LastError,
 		"createdAt": p.CreatedAt, "updatedAt": p.UpdatedAt, "boundConnectionCount": bound}
 }
 
@@ -65,6 +65,7 @@ type poolInput struct {
 	StrictProxy *bool   `json:"strictProxy"`
 	// RelayKey registers a relay the user deployed themselves; it is write-only and never returned.
 	RelayKey *string `json:"relayKey"`
+	Keyless  *bool   `json:"keyless"`
 }
 
 func (in poolInput) apply(p *db.ProxyPool) {
@@ -73,6 +74,9 @@ func (in poolInput) apply(p *db.ProxyPool) {
 	}
 	if in.Type != nil && *in.Type != "" {
 		p.Type = *in.Type
+	}
+	if in.Keyless != nil {
+		p.Keyless = *in.Keyless
 	}
 	if in.RelayKey != nil && *in.RelayKey != "" {
 		p.RelayKey = strings.TrimSpace(*in.RelayKey)

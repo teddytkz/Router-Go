@@ -515,3 +515,39 @@ func TestNoAuthProviderNeedsNoKey(t *testing.T) {
 		t.Errorf("a disabled connection was recreated: %d", len(all))
 	}
 }
+
+// A keyless relay (XRouter-Next's) has no /health and ignores the key: it answers 400 unless x-relay-target is set.
+// Test must forward a real request to it and no key may be sent.
+func TestKeylessRelay(t *testing.T) {
+	e := newEnv(t, func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, `{"data":[{"id":"m"}]}`) }, "chat")
+	e.store.UpdateSettings(map[string]any{"requireLogin": false})
+	var gotKey string
+	old := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotKey = r.Header.Get("x-relay-key")
+		if r.Header.Get("x-relay-target") == "" {
+			w.WriteHeader(400)
+			io.WriteString(w, `{"error":"Missing x-relay-target header"}`)
+			return
+		}
+		io.WriteString(w, "ok")
+	}))
+	defer old.Close()
+
+	_, out := e.json("POST", "/api/proxy-pools", `{"name":"old","type":"vercel","proxyUrl":"`+old.URL+`"}`)
+	id := out["proxyPool"].(map[string]any)["id"].(string)
+	if _, out := e.json("POST", "/api/proxy-pools/"+id+"/test", ""); out["ok"] != false {
+		t.Fatalf("a keyed test of a keyless relay should fail with its 400, got %v", out)
+	}
+	if code, out := e.json("PATCH", "/api/proxy-pools/"+id, `{"keyless":true}`); code != 200 || out["proxyPool"].(map[string]any)["keyless"] != true {
+		t.Fatalf("set keyless = %d %v", code, out)
+	}
+	if _, out := e.json("POST", "/api/proxy-pools/"+id+"/test", ""); out["ok"] != true {
+		t.Errorf("keyless test = %v", out)
+	}
+	if gotKey != "" {
+		t.Errorf("x-relay-key sent to a keyless relay: %q", gotKey)
+	}
+	if code, _ := e.json("POST", "/api/proxy-pools", `{"name":"p","type":"postcard","relayKey":"k","keyless":true,"proxyUrl":"`+old.URL+`"}`); code != 400 {
+		t.Errorf("keyless postcard = %d, want 400", code)
+	}
+}

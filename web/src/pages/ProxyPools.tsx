@@ -11,10 +11,10 @@ const TYPE = { http: "Proxy", vercel: "Vercel relay", cloudflare: "Cloudflare re
 // ---------- add / edit a plain proxy ----------
 function PoolModal({ pool, onClose }: { pool?: ProxyPool; onClose: () => void }) {
   const toast = useToast(), create = useCreateProxyPool(), update = useUpdateProxyPool();
-  const [name, setName] = useState(pool?.name ?? ""), [url, setUrl] = useState(pool?.proxyUrl ?? ""), [noProxy, setNoProxy] = useState(pool?.noProxy ?? ""), [strict, setStrict] = useState(pool?.strictProxy ?? false);
+  const [name, setName] = useState(pool?.name ?? ""), [url, setUrl] = useState(pool?.proxyUrl ?? ""), [noProxy, setNoProxy] = useState(pool?.noProxy ?? ""), [strict, setStrict] = useState(pool?.strictProxy ?? false), [keyless, setKeyless] = useState(pool?.keyless ?? false);
   const [type, setType] = useState(pool?.type ?? "http"), [key, setKey] = useState("");
   const relay = type !== "http", busy = create.isPending || update.isPending;
-  const body = { name: name.trim(), proxyUrl: url.trim(), noProxy: noProxy.trim(), strictProxy: strict, ...(pool ? {} : { type }), ...(key.trim() ? { relayKey: key.trim() } : {}) };
+  const body = { name: name.trim(), proxyUrl: url.trim(), noProxy: noProxy.trim(), strictProxy: strict, keyless: relay && type !== "postcard" && keyless, ...(pool ? {} : { type }), ...(key.trim() ? { relayKey: key.trim() } : {}) };
   const done = { onSuccess: () => { toast("ok", pool ? "Pool updated" : "Pool added"); onClose(); }, onError: (e: unknown) => toast("err", errText(e)) };
   return (
     <Modal open onClose={onClose} title={pool ? `Edit ${pool.name}` : "Add proxy"}
@@ -32,7 +32,11 @@ function PoolModal({ pool, onClose }: { pool?: ProxyPool; onClose: () => void })
       <Field label={relay ? "Relay URL" : "Proxy URL"} hint={relay ? "The deployed function's address." : "http://user:pass@host:port, https:// or socks5://"}>
         {(id) => <Input id={id} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://127.0.0.1:8080" autoComplete="off" />}
       </Field>
-      {relay && <Field label="Relay key" hint={pool ? "Leave empty to keep the stored key." : "The secret the deployment was created with. Kept on the server."}>
+      {relay && type !== "postcard" && <label className="flex items-start gap-3 text-[13px]">
+        <Switch checked={keyless} onChange={setKeyless} label="Relay without a key" />
+        <span><b>Relay without a key</b><br /><span className="text-muted">For a relay deployed elsewhere that does not check a key. No key is sent, and Test forwards a real request instead of calling /health.</span></span>
+      </label>}
+      {relay && !keyless && <Field label="Relay key" hint={pool ? "Leave empty to keep the stored key." : "The secret the deployment was created with. Kept on the server."}>
         {(id) => <Input id={id} type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} />}
       </Field>}
       <Field label="No proxy for" hint="Comma-separated hosts that skip the proxy (optional)">{(id) => <Input id={id} value={noProxy} onChange={(e) => setNoProxy(e.target.value)} placeholder="localhost, .internal" />}</Field>
@@ -84,6 +88,7 @@ function PoolCard({ p, now, onEdit }: { p: ProxyPool; now: number; onEdit: () =>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge tone="accent">{TYPE[p.type]}</Badge>
             <Badge tone={tone}>{p.testStatus === "unknown" ? "untested" : p.testStatus === "active" ? "working" : "failing"}</Badge>
+            {p.keyless && <Badge tone="warn">No key</Badge>}
             {p.strictProxy && <Badge tone="warn">Strict</Badge>}
             <Badge>{p.boundConnectionCount} key{p.boundConnectionCount === 1 ? "" : "s"}</Badge>
             {p.lastTestedAt && <span className="text-xs text-muted">tested {ago(p.lastTestedAt, now)}</span>}

@@ -34,7 +34,8 @@ type ProxyPool struct {
 	TestStatus   string `json:"testStatus"`
 	LastTestedAt string `json:"lastTestedAt,omitempty"`
 	LastError    string `json:"lastError,omitempty"`
-	RelayKey     string `json:"-"` // shared secret of a deployed relay; never leaves the server
+	RelayKey     string `json:"-"`       // shared secret of a deployed relay; never leaves the server
+	Keyless      bool   `json:"keyless"` // a relay deployed elsewhere that does not check a key (e.g. XRouter-Next's); no key is sent and Test forwards a real request
 	CreatedAt    string `json:"createdAt"`
 	UpdatedAt    string `json:"updatedAt"`
 }
@@ -62,6 +63,7 @@ type poolData struct {
 	LastTestedAt string `json:"lastTestedAt,omitempty"`
 	LastError    string `json:"lastError,omitempty"`
 	RelayKey     string `json:"relayKey,omitempty"`
+	Keyless      bool   `json:"keyless,omitempty"`
 }
 
 func scanPool(sc interface{ Scan(...any) error }) (*ProxyPool, error) {
@@ -76,7 +78,7 @@ func scanPool(sc interface{ Scan(...any) error }) (*ProxyPool, error) {
 	_ = json.Unmarshal([]byte(raw), &d)
 	p.IsActive, p.TestStatus = active == 1, status.String
 	p.Name, p.Type, p.ProxyURL, p.NoProxy, p.StrictProxy = d.Name, d.Type, d.ProxyURL, d.NoProxy, d.StrictProxy
-	p.LastTestedAt, p.LastError, p.RelayKey = d.LastTestedAt, d.LastError, d.RelayKey
+	p.LastTestedAt, p.LastError, p.RelayKey, p.Keyless = d.LastTestedAt, d.LastError, d.RelayKey, d.Keyless
 	if p.Type == "" {
 		p.Type = PoolHTTP
 	}
@@ -136,6 +138,8 @@ func (p *ProxyPool) validate() error {
 		return InvalidError("name is required (max 80 characters)")
 	case p.Type != PoolHTTP && !p.IsRelay():
 		return InvalidError("type must be http, vercel, cloudflare or postcard")
+	case p.Keyless && p.Type != PoolVercel && p.Type != PoolCloudflare:
+		return InvalidError("only a Vercel or Cloudflare relay can be keyless")
 	}
 	u, err := ValidProxyURL(p.ProxyURL, p.IsRelay())
 	p.ProxyURL = u
@@ -143,7 +147,7 @@ func (p *ProxyPool) validate() error {
 }
 
 func (p *ProxyPool) data() string {
-	b, _ := json.Marshal(poolData{p.Name, p.Type, p.ProxyURL, strings.TrimSpace(p.NoProxy), p.StrictProxy, p.LastTestedAt, p.LastError, p.RelayKey})
+	b, _ := json.Marshal(poolData{p.Name, p.Type, p.ProxyURL, strings.TrimSpace(p.NoProxy), p.StrictProxy, p.LastTestedAt, p.LastError, p.RelayKey, p.Keyless})
 	return string(b)
 }
 
