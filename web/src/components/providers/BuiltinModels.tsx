@@ -34,8 +34,8 @@ export function BuiltinModels({ p }: { p: BuiltinProvider }) {
   const test = async (id: string) => {
     setResults((s) => ({ ...s, [id]: { state: "testing" } }));
     let res: Result;
-    try { const r = await testModel.mutateAsync(code(id)); res = r.ok ? { state: "ok", msg: `Works${r.latencyMs != null ? ` · ${fmtMs(r.latencyMs)}` : ""}` } : { state: "fail", msg: r.error ?? "Test failed" }; }
-    catch (e) { res = { state: "fail", msg: errText(e) }; }
+    try { const r = await testModel.mutateAsync(code(id)); res = r.ok ? { state: "ok", msg: `Works${r.latencyMs != null ? ` · ${fmtMs(r.latencyMs)}` : ""}` } : { state: "fail", msg: r.error ?? "Test failed" }; toast(r.ok ? "ok" : "err", `${code(id)}: ${r.ok ? r.reply || "works, but returned no text" : res.msg}`); }
+    catch (e) { res = { state: "fail", msg: errText(e) }; toast("err", `${code(id)}: ${res.msg}`); }
     setResults((s) => ({ ...s, [id]: res }));
   };
   const enable = (m: BuiltinModel) => { setBusy(m.id); add.mutate({ providerAlias: p.alias, id: m.id, name: m.name }, { onError: (e) => toast("err", errText(e)), onSettled: () => setBusy(null) }); };

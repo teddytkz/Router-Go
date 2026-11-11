@@ -5,13 +5,15 @@ import (
 	"time"
 )
 
-// Constants ported from XRouter-Next open-sse/config/errorConfig.js.
+// Constants ported from XRouter-Next open-sse/config/errorConfig.js, except that no cooldown lasts longer than
+// 30 s (XRouter-Next backs off to 5 min and benches a rejected key for 2 min) so a key comes back quickly. The one
+// exception is permanentCooldown: an account the upstream says is suspended or revoked is not retried every 30 s.
 const (
 	backoffBase       = 2 * time.Second
-	backoffMax        = 5 * time.Minute
+	backoffMax        = 30 * time.Second
 	backoffMaxLevel   = 15
 	transientCooldown = 30 * time.Second
-	longCooldown      = 2 * time.Minute
+	longCooldown      = 30 * time.Second
 	shortCooldown     = 5 * time.Second
 	permanentCooldown = 24 * time.Hour
 

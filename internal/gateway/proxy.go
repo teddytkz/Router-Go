@@ -323,7 +323,7 @@ func (g *Gateway) attempt(w http.ResponseWriter, r *http.Request, t target, cf s
 		defer g.track(ActiveRequest{Provider: node.ID, Model: t.label, ConnectionID: c.ID, Account: c.Name, Endpoint: r.URL.Path, Started: time.Now()})()
 		key, kerr := g.Secret(r.Context(), node, c)
 		if kerr != nil { // an expired sign-in that cannot be renewed: bench this connection, the next one may work
-			g.Store.MarkConnection(c.ID, 401, kerr.Error(), 2*time.Minute, c.BackoffLevel())
+			g.Store.MarkConnection(c.ID, 401, kerr.Error(), longCooldown, c.BackoffLevel())
 			consolelog.Logf("WARN", "AUTH", "%s/%s: %s", node.Name, c.Name, kerr)
 			last = &failure{status: 401, msg: kerr.Error(), conn: c}
 			return outcome{}, false

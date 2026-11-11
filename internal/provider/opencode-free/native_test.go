@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"router-go/internal/consolelog"
 	"router-go/internal/provider"
 )
 
@@ -373,5 +374,37 @@ func TestTransportThroughConnectProxy(t *testing.T) {
 	req = req.WithContext(ProxyForConn(req.Context(), "socks5://127.0.0.1:1080"))
 	if _, err := c.Do(req); err == nil || !strings.Contains(err.Error(), "http(s) proxy") {
 		t.Fatalf("socks5 request = %v, want a refusal", err)
+	}
+}
+
+// Next to other Claude Code tools, ReportFindings makes the free tier answer 429 for hours (live, 2026-11-11). It is
+// sent under another name on every lane and gets its own name back in the answer.
+func TestReportFindingsToolIsAliasedAndRestored(t *testing.T) {
+	tool := func(name string) any {
+		return map[string]any{"type": "function", "function": map[string]any{"name": name, "parameters": map[string]any{"type": "object", "properties": map[string]any{}}}}
+	}
+	body := map[string]any{"model": "big-pickle", "messages": []any{map[string]any{"role": "user", "content": "hi"}},
+		"tools": []any{tool("ReportFindings"), tool("DeferredToolPlaceholder"), tool("ScheduleWakeup"), tool("Write")}}
+	req := mustRequest(t, "big-pickle", body)
+	tools, _ := sentBody(t, req)["tools"].([]any)
+	if hasTool(tools, "ReportFindings") || !hasTool(tools, "report_findings") || !hasTool(tools, "DeferredToolPlaceholder") || !hasTool(tools, "ScheduleWakeup") || !hasTool(tools, "Write") {
+		t.Fatalf("only ReportFindings should be renamed: %s", mustJSON(t, tools))
+	}
+	renames, _ := req.Context().Value(renamesKey{}).(map[string]string)
+	if renames["report_findings"] != "ReportFindings" {
+		t.Fatalf("rename map = %v", renames)
+	}
+	logged := false
+	for _, e := range consolelog.Default.Snapshot() {
+		logged = logged || strings.Contains(e.Msg, "[OPENCODE]") && strings.Contains(e.Msg, "ReportFindings → report_findings")
+	}
+	if !logged {
+		t.Error("the rename is not in the console log")
+	}
+	event := map[string]any{"choices": []any{map[string]any{"delta": map[string]any{"tool_calls": []any{
+		map[string]any{"index": 0, "function": map[string]any{"name": "report_findings", "arguments": "{}"}}}}}}}
+	restoreToolNames(event, renames)
+	if !strings.Contains(mustJSON(t, event), `"ReportFindings"`) {
+		t.Fatalf("caller tool name not restored: %v", event)
 	}
 }

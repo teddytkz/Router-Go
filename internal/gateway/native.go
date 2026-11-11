@@ -61,16 +61,16 @@ func (g *Gateway) nativeDo(ctx context.Context, node *db.Node, p provider.Provid
 	return nil, errors.New("provider has no endpoint")
 }
 
-// probeNative is ProbeModel for Native providers: a tiny real chat call through the provider's own request/response
+// probeNative is ProbeModel for Native providers: a small real chat call through the provider's own request/response
 // code, read to the end so an error inside the stream counts too.
-func (g *Gateway) probeNative(ctx context.Context, node *db.Node, p provider.Provider, key, model string) (ProbeResult, error) {
+func (g *Gateway) probeNative(ctx context.Context, node *db.Node, p provider.Provider, key, model string, tokens int) (ProbeResult, error) {
 	budget := probeTimeout
 	if p.Native.Local != nil {
 		budget = localProbeTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
-	_, body := probeRequest(false, "chat", model)
+	_, body := probeRequest(false, "chat", model, tokens)
 	delete(body, "stream_options") // a Native provider speaks its own protocol; usage is read from the converted stream if it is there
 	b, _ := json.Marshal(body)
 	psd, _ := ctx.Value(psdKey{}).(map[string]any)
@@ -92,5 +92,5 @@ func (g *Gateway) probeNative(ctx context.Context, node *db.Node, p provider.Pro
 		return ProbeResult{}, errors.New(errorMessage([]byte(`{"error"`+string(line)), 0))
 	}
 	in, out := probeUsage(raw)
-	return ProbeResult{Latency: time.Since(start), Prompt: in, Completion: out}, nil
+	return ProbeResult{Latency: time.Since(start), Prompt: in, Completion: out, Reply: probeReply(raw)}, nil
 }

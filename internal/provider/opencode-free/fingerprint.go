@@ -3,7 +3,10 @@ package opencodefree
 import (
 	"os"
 	"runtime"
+	"slices"
 	"strings"
+
+	"router-go/internal/consolelog"
 )
 
 // The free lane gates on two body-side fingerprints, both mirrored verbatim from 9router's opencodeFingerprint.js
@@ -156,6 +159,11 @@ func concealTools(shape string, tools []any) ([]any, map[string]string) {
 		taken[alias] = true
 		return alias
 	}
+	// Found by bisecting a live 429 on 2026-11-11 (Claude Code's 15 tools): declared next to some other Claude Code
+	// tools (found so far: DeferredToolPlaceholder, ScheduleWakeup), "ReportFindings" makes the free tier answer
+	// FreeUsageLimitError with a retry-after of about 13 h, while every one of them alone, or under another name, passes.
+	// ReportFindings is in every offending pair, so it is the one sent under another name. The full captured body
+	// answered 200 once it was renamed, and 429 before. Only this provider's upstream was tested.
 	for _, t := range tools {
 		m, ok := t.(map[string]any)
 		if !ok {
@@ -163,6 +171,12 @@ func concealTools(shape string, tools []any) ([]any, map[string]string) {
 			continue
 		}
 		name := toolName(shape, m)
+		if name == "ReportFindings" {
+			alias := aliasFor("report_findings")
+			renames[alias] = name
+			out = append(out, withToolName(shape, m, alias))
+			continue
+		}
 		if strings.Contains(strings.ToLower(name), "terminal") {
 			alias := aliasFor(gatedAlias)
 			renames[alias] = name
@@ -224,6 +238,7 @@ func appendMissing(shape string, tools *[]any) []string {
 func applyFingerprintTools(body map[string]any, shape string) map[string]string {
 	tools, _ := body["tools"].([]any)
 	out, renames := concealTools(shape, tools)
+	logRenames(renames)
 	appended := appendMissing(shape, &out)
 	body["tools"] = out
 	retargetToolChoice(body, renames)
@@ -431,4 +446,18 @@ func strconvItoa(n int) string {
 		n /= 10
 	}
 	return string(b[i:])
+}
+
+// logRenames tells the console which of the caller's tools went upstream under another name (the answer gets the
+// caller's name back), so a changed request is never a surprise when reading a failure.
+func logRenames(renames map[string]string) {
+	if len(renames) == 0 {
+		return
+	}
+	parts := make([]string, 0, len(renames))
+	for alias, orig := range renames {
+		parts = append(parts, orig+" → "+alias)
+	}
+	slices.Sort(parts)
+	consolelog.Logf("INFO", "OPENCODE", "tools sent under another name, restored in the answer: %s", strings.Join(parts, ", "))
 }

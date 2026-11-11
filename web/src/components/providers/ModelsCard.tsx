@@ -52,8 +52,8 @@ export function ModelsCard({ node }: { node: ProviderNode }) {
   const test = async (id: string) => {
     setResults((s) => ({ ...s, [id]: { state: "testing" } }));
     let res: Result;
-    try { const r = await testModel.mutateAsync(code(id)); res = r.ok ? { state: "ok", msg: `Works${r.latencyMs != null ? ` · ${fmtMs(r.latencyMs)}` : ""}` } : { state: "fail", msg: r.error ?? "Test failed" }; }
-    catch (e) { res = { state: "fail", msg: errText(e) }; }
+    try { const r = await testModel.mutateAsync(code(id)); res = r.ok ? { state: "ok", msg: `Works${r.latencyMs != null ? ` · ${fmtMs(r.latencyMs)}` : ""}` } : { state: "fail", msg: r.error ?? "Test failed" }; toast(r.ok ? "ok" : "err", `${code(id)}: ${r.ok ? r.reply || "works, but returned no text" : res.msg}`); }
+    catch (e) { res = { state: "fail", msg: errText(e) }; toast("err", `${code(id)}: ${res.msg}`); }
     setResults((s) => ({ ...s, [id]: res }));
   };
 

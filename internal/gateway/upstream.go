@@ -99,7 +99,7 @@ func (g *Gateway) Validate(ctx context.Context, nodeType, baseURL, apiType, key,
 		return ValidateResult{Error: fmt.Sprintf("unexpected response (%d)", status)}
 	}
 
-	path, body := probeRequest(anthropic, apiType, modelID)
+	path, body := probeRequest(anthropic, apiType, modelID, probeCheckTokens)
 	b, _ := json.Marshal(body)
 	req, _ := g.newReq(ctx, "POST", base+path, key, b, true, anthropic)
 	resp, err := g.Client.Do(req)
@@ -227,17 +227,24 @@ func (g *Gateway) InvalidateModels(nodeID string) {
 // probePrompt is what a test call asks: a real greeting and question rather than a bare "ping".
 const probePrompt = "hi, who are you? are you ai?"
 
-// probeRequest is the smallest valid request for a node: probePrompt with a one-token answer budget (16 on
-// responses). It always streams: some upstreams only accept streaming chat (CodeBuddy), and others answer a stream
-// in about a second while a non-stream call hangs.
-func probeRequest(anthropic bool, apiType, model string) (path string, body map[string]any) {
+// Answer budgets of a probe: a key check only needs the upstream to accept the call (one token, so it costs nothing);
+// the dashboard's model test shows the reply, so it asks for a short answer.
+const (
+	probeCheckTokens = 1
+	ProbeReplyTokens = 256
+)
+
+// probeRequest is the smallest valid request for a node: probePrompt with an answer budget of tokens (at least 16 on
+// responses, which rejects less). It always streams: some upstreams only accept streaming chat (CodeBuddy), and
+// others answer a stream in about a second while a non-stream call hangs.
+func probeRequest(anthropic bool, apiType, model string, tokens int) (path string, body map[string]any) {
 	switch {
 	case anthropic:
-		return "/messages", map[string]any{"model": model, "max_tokens": 1, "stream": true, "messages": []any{map[string]any{"role": "user", "content": probePrompt}}}
+		return "/messages", map[string]any{"model": model, "max_tokens": tokens, "stream": true, "messages": []any{map[string]any{"role": "user", "content": probePrompt}}}
 	case apiType == "responses":
-		return "/responses", map[string]any{"model": model, "input": probePrompt, "max_output_tokens": 16, "stream": true}
+		return "/responses", map[string]any{"model": model, "input": probePrompt, "max_output_tokens": max(tokens, 16), "stream": true}
 	}
-	return "/chat/completions", map[string]any{"model": model, "max_tokens": 1, "stream": true, "stream_options": map[string]any{"include_usage": true}, "messages": []any{map[string]any{"role": "user", "content": probePrompt}}}
+	return "/chat/completions", map[string]any{"model": model, "max_tokens": tokens, "stream": true, "stream_options": map[string]any{"include_usage": true}, "messages": []any{map[string]any{"role": "user", "content": probePrompt}}}
 }
 
 const (
@@ -248,11 +255,78 @@ const (
 	localProbeTimeout = 180 * time.Second
 )
 
-// ProbeResult is what a one-token test call reports: how long it took and the tokens the upstream said it used
-// (0 when the answer carries no usage).
+// ProbeResult is what a test call reports: how long it took, the tokens the upstream said it used (0 when the answer
+// carries no usage) and the text it answered with (empty when the budget went on reasoning).
 type ProbeResult struct {
 	Latency            time.Duration
 	Prompt, Completion int
+	Reply              string
+}
+
+// probeReply reads the answer text out of a probe answer, in the same shapes as probeUsage: chat deltas or message,
+// messages text deltas or content blocks, responses output_text deltas. A reasoning model can spend the whole budget
+// thinking; then the reply is the start of its reasoning, marked as such, so the test still shows something.
+func probeReply(raw []byte) string {
+	var answer, thought strings.Builder
+	add := func(sb *strings.Builder, v any) {
+		s, _ := v.(string)
+		sb.WriteString(s)
+	}
+	scan := func(b []byte) {
+		var ev map[string]any
+		if json.Unmarshal(b, &ev) != nil {
+			return
+		}
+		choices, _ := ev["choices"].([]any)
+		for _, c := range choices {
+			ch, _ := c.(map[string]any)
+			for _, k := range []string{"delta", "message"} {
+				if m, ok := ch[k].(map[string]any); ok {
+					add(&answer, m["content"])
+					add(&thought, m["reasoning_content"])
+					add(&thought, m["reasoning"])
+				}
+			}
+		}
+		blocks, _ := ev["content"].([]any)
+		for _, blk := range blocks { // a non-streaming messages answer
+			m, _ := blk.(map[string]any)
+			switch m["type"] {
+			case "text":
+				add(&answer, m["text"])
+			case "thinking":
+				add(&thought, m["thinking"])
+			}
+		}
+		switch d := ev["delta"].(type) {
+		case map[string]any: // messages: content_block_delta
+			add(&answer, d["text"])
+			add(&thought, d["thinking"])
+		case string: // responses
+			if ev["type"] == "response.output_text.delta" {
+				answer.WriteString(d)
+			}
+		}
+	}
+	for _, line := range bytes.Split(raw, []byte("\n")) {
+		if data, ok := bytes.CutPrefix(bytes.TrimSpace(line), []byte("data:")); ok {
+			scan(bytes.TrimSpace(data))
+		}
+	}
+	if answer.Len() == 0 && thought.Len() == 0 {
+		scan(bytes.TrimSpace(raw)) // a non-streaming JSON answer
+	}
+	reply, prefix := strings.Join(strings.Fields(answer.String()), " "), ""
+	if reply == "" {
+		reply, prefix = strings.Join(strings.Fields(thought.String()), " "), "(no answer yet, still thinking) "
+	}
+	if reply == "" {
+		return ""
+	}
+	if r := []rune(reply); len(r) > 300 {
+		reply = string(r[:300]) + "…"
+	}
+	return prefix + reply
 }
 
 // probeUsage reads the token counts out of a probe answer: an SSE stream or a JSON body, in chat (prompt/completion),
@@ -295,17 +369,17 @@ func probeUsage(raw []byte) (prompt, completion int) {
 	return prompt, completion
 }
 
-// ProbeModel sends a one-token request for model through node with the given key and reports how long it took and
-// the tokens it used.
-func (g *Gateway) ProbeModel(ctx context.Context, node *db.Node, key, model string) (ProbeResult, error) {
+// ProbeModel sends probePrompt for model through node with the given key (answer budget: tokens) and reports how
+// long it took, the tokens it used and what it answered.
+func (g *Gateway) ProbeModel(ctx context.Context, node *db.Node, key, model string, tokens int) (ProbeResult, error) {
 	if p, ok := nativeOf(node); ok {
-		return g.probeNative(ctx, node, p, key, model)
+		return g.probeNative(ctx, node, p, key, model, tokens)
 	}
 	format := g.formatFor(node, model)
 	anthropic := format == "messages"
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
-	path, body := probeRequest(anthropic, format, model)
+	path, body := probeRequest(anthropic, format, model, tokens)
 	if fix := g.bodyFix(node, model); fix != nil && format == "chat" {
 		fix(body) // the same fix-ups as real requests, or a strict upstream would reject the probe
 	}
@@ -331,7 +405,7 @@ func (g *Gateway) ProbeModel(ctx context.Context, node *db.Node, key, model stri
 			return ProbeResult{}, fmt.Errorf("HTTP %d: %s", resp.StatusCode, errorMessage(raw, resp.StatusCode))
 		}
 		in, out := probeUsage(raw)
-		return ProbeResult{Latency: time.Since(start), Prompt: in, Completion: out}, nil
+		return ProbeResult{Latency: time.Since(start), Prompt: in, Completion: out, Reply: probeReply(raw)}, nil
 	}
 }
 
@@ -356,7 +430,7 @@ func (g *Gateway) ValidateBuiltin(ctx context.Context, node *db.Node, key string
 			return ValidateResult{Error: "API key unauthorized", Method: "models", Rejected: true}
 		}
 	}
-	pr, err := g.ProbeModel(ctx, node, key, p.Models[0].ID)
+	pr, err := g.ProbeModel(ctx, node, key, p.Models[0].ID, probeCheckTokens)
 	if err != nil {
 		return ValidateResult{Error: err.Error(), Method: "chat", Rejected: strings.HasPrefix(err.Error(), "HTTP 401") || strings.HasPrefix(err.Error(), "HTTP 403")}
 	}

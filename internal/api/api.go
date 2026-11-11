@@ -1210,7 +1210,7 @@ func (a *API) usageHistory(w http.ResponseWriter, r *http.Request) {
 
 // ---- routing health / model test ----
 
-// testModel sends a one-token request for prefix/model using the provider's first usable key.
+// testModel sends a short prompt to prefix/model using the provider's first usable key and returns what it answered.
 func (a *API) testModel(w http.ResponseWriter, r *http.Request) {
 	var in struct{ Model string }
 	if !readJSON(w, r, &in) {
@@ -1253,7 +1253,7 @@ func (a *API) testModel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		began := time.Now()
-		pr, err := a.GW.ProbeModel(gateway.ConnCtx(r.Context(), c), node, key, model)
+		pr, err := a.GW.ProbeModel(gateway.ConnCtx(r.Context(), c), node, key, model, gateway.ProbeReplyTokens)
 		a.recordTest(node, c, model, "/dashboard/test-model", err == nil, time.Since(began), pr.Prompt, pr.Completion)
 		if err != nil {
 			consolelog.Logf("WARN", "TEST", "%s/%s via %s: %s", prefix, model, c.Name, err)
@@ -1261,7 +1261,7 @@ func (a *API) testModel(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		consolelog.Logf("INFO", "TEST", "%s/%s via %s: OK in %dms", prefix, model, c.Name, pr.Latency.Milliseconds())
-		reply(map[string]any{"ok": true, "latencyMs": pr.Latency.Milliseconds()})
+		reply(map[string]any{"ok": true, "latencyMs": pr.Latency.Milliseconds(), "reply": pr.Reply})
 		return
 	}
 	writeJSON(w, 200, map[string]any{"ok": false, "error": "no active connection to test with"})

@@ -99,7 +99,7 @@ export type ActiveRequest = { provider: string; model: string; connectionId: str
 export type Circuit = "CLOSED" | "OPEN" | "HALF_OPEN";
 // Last 15 minutes; avgLatencyMs/successRate (0-100) are null when there was no traffic.
 export type RoutingHealthRow = { provider: string; name: string; type: string; circuit: Circuit; retryAfterMs: number; failures: number; avgLatencyMs: number | null; successRate: number | null; requests: number };
-export type ModelTestResult = { ok: boolean; error?: string; latencyMs?: number };
+export type ModelTestResult = { ok: boolean; error?: string; latencyMs?: number; reply?: string };
 
 export type TestBatchResult = { connectionId: string; name: string; provider: string; providerName: string; ok: boolean; latencyMs: number; method?: string; error?: string };
 export type TestBatch = { results: TestBatchResult[]; summary: { total: number; passed: number; failed: number; skipped?: number } };

@@ -113,26 +113,33 @@ func TestModelTestRetriesWithoutStreamOptions(t *testing.T) {
 	}
 }
 
-// The model test asks a real question, not a bare "ping".
-func TestModelTestSendsGreetingPrompt(t *testing.T) {
+// The model test asks a real question, with room for a short answer, and hands the answer back for the toast.
+func TestModelTestSendsGreetingPromptAndReturnsReply(t *testing.T) {
 	var prompt string
+	var maxTokens float64
 	e := newEnv(t, func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Messages []struct{ Content string }
+			Messages  []struct{ Content string }
+			MaxTokens float64 `json:"max_tokens"`
 		}
 		json.NewDecoder(r.Body).Decode(&body)
 		if len(body.Messages) > 0 {
 			prompt = body.Messages[0].Content
 		}
-		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"p\"}}]}\n\ndata: [DONE]\n"))
+		maxTokens = body.MaxTokens
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"Hi! I am \"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\"an AI.\"}}]}\n\ndata: [DONE]\n"))
 	}, "chat")
 	e.addKey("one", "k1")
 	e.store.UpdateSettings(map[string]any{"requireLogin": false})
 
-	if _, out := e.json("POST", "/api/models/test", `{"model":"mock/m"}`); out["ok"] != true {
-		t.Fatalf("model test failed: %v", out)
+	_, out := e.json("POST", "/api/models/test", `{"model":"mock/m"}`)
+	if out["ok"] != true || out["reply"] != "Hi! I am an AI." {
+		t.Fatalf("model test = %v", out)
 	}
 	if prompt != "hi, who are you? are you ai?" {
 		t.Errorf("probe prompt = %q", prompt)
+	}
+	if maxTokens != 256 {
+		t.Errorf("max_tokens = %v, want room for a short answer", maxTokens)
 	}
 }
