@@ -82,9 +82,9 @@ const kiroLimits = `{"subscriptionInfo":{"subscriptionTitle":"KIRO POWER"},"next
   "freeTrialInfo":{"currentUsageWithPrecision":3,"usageLimitWithPrecision":50,"freeTrialExpiry":"2030-01-01T00:00:00Z"}}]}`
 
 func TestKiroUsageParsesAndCaches(t *testing.T) {
-	var ua, tokenType string
+	var ua, amz, tokenType string
 	e, hits := usageEnv(t, "kiro", "", func(w http.ResponseWriter, r *http.Request) {
-		ua, tokenType = r.Header.Get("User-Agent"), r.Header.Get("tokentype")
+		ua, amz, tokenType = r.Header.Get("User-Agent"), r.Header.Get("X-Amz-User-Agent"), r.Header.Get("tokentype")
 		if r.Header.Get("Authorization") != "Bearer secret-1" || r.URL.Path != "/getUsageLimits" {
 			w.WriteHeader(403)
 			return
@@ -107,7 +107,7 @@ func TestKiroUsageParsesAndCaches(t *testing.T) {
 	if strings.Contains(raw, "secret-1") {
 		t.Error("the token leaked into the response")
 	}
-	if !strings.Contains(ua, "kiro-ide") || strings.Contains(ua, "KiroIDE") || tokenType != "" {
+	if !strings.Contains(ua, "KiroIDE-1.4.154-") || !strings.Contains(amz, "KiroIDE-1.4.154-") || tokenType != "" {
 		t.Errorf("headers: user-agent %q tokentype %q", ua, tokenType)
 	}
 

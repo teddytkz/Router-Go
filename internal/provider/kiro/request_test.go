@@ -228,7 +228,8 @@ func TestEndpointsAndRequest(t *testing.T) {
 	}
 	h := req.Header
 	if h.Get("Authorization") != "Bearer tok" || h.Get("TokenType") != "EXTERNAL_IDP" || h.Get("x-amzn-codewhisperer-profile-arn") != "arn:y" ||
-		h.Get("Accept") != "application/vnd.amazon.eventstream" || h.Get("X-Amz-Target") != "" {
+		h.Get("Accept") != "application/vnd.amazon.eventstream" || h.Get("X-Amz-Target") != "" ||
+		!strings.Contains(h.Get("User-Agent"), "KiroIDE-1.4.154-") || !strings.Contains(h.Get("X-Amz-User-Agent"), "KiroIDE-1.4.154-") {
 		t.Errorf("headers = %v", h)
 	}
 	req, _ = request(context.Background(), provider.NativeCall{URL: "https://codewhisperer.us-east-1.amazonaws.com/generateAssistantResponse", Token: "t", Body: chat(t, `{}`)})

@@ -29,8 +29,8 @@ func models() []provider.Model {
 
 const note = "RISK: Kiro is meant for the Kiro IDE and CLI. Using an account through a router is not licensed by Amazon/Kiro and may get the account " +
 	"restricted or suspended: use at your own risk (XRouter-Next marks it deprecated for the same reason). Experimental: the wire protocol is ported " +
-	"from XRouter-Next and has only been tested against mocks. The IDE-identity headers XRouter-Next adds on top of the static ones below are not sent; " +
-	"if Kiro refuses requests, the Custom Headers card is the place to experiment."
+	"from XRouter-Next and has only been tested against mocks. Requests identify as Kiro IDE " + kiroVersion + " (see identity.go); the " +
+	"Custom Headers card still overrides any header."
 
 func init() {
 	provider.Register(provider.Provider{
@@ -40,9 +40,9 @@ func init() {
 		AuthHint: "OAuth button: AWS Builder ID. Or paste (Add key) a refresh token (Google/GitHub accounts: refreshToken of Kiro's ~/.aws/sso/cache/kiro-auth-token.json), " +
 			`or a JSON: IAM Identity Center {"refreshToken":"…","clientId":"…","clientSecret":"…","region":"us-east-1"}, ` +
 			`enterprise IdP {"authMethod":"external_idp","refreshToken":"…","clientId":"…","tokenEndpoint":"https://login.microsoftonline.com/…","scope":"…","profileArn":"…"}`,
-		Note:      note,
-		BaseURL:   defaultBase,
-		Headers:   map[string]string{"User-Agent": "AWS-SDK-JS/3.0.0 kiro-ide/1.0.0", "X-Amz-User-Agent": "aws-sdk-js/3.0.0 kiro-ide/1.0.0"},
+		Note:    note,
+		BaseURL: defaultBase,
+		// The identity headers are per account, so they are built per request (identity.go) instead of here.
 		OAuthBase: "https://prod.us-east-1.auth.desktop.kiro.dev", OAuth: oauth,
 		Native: native, Usage: usage,
 		Models: models(),

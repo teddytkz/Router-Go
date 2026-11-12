@@ -238,8 +238,9 @@ func profileOf(ctx context.Context, d provider.Doer, arn, accessToken string) st
 // lookupProfile asks CodeWhisperer for the account's profile ARN; "" when it cannot say (the shared default applies).
 func lookupProfile(ctx context.Context, d provider.Doer, accessToken string) string {
 	var r struct{ Profiles []struct{ Arn string } }
-	err := post(ctx, d, "Kiro profile lookup", "https://codewhisperer.us-east-1.amazonaws.com/ListAvailableProfiles",
-		map[string]string{"Authorization": "Bearer " + accessToken}, map[string]any{"maxResults": 10}, &r)
+	h := identity(accessToken, false)
+	h["Authorization"] = "Bearer " + accessToken
+	err := post(ctx, d, "Kiro profile lookup", "https://codewhisperer.us-east-1.amazonaws.com/ListAvailableProfiles", h, map[string]any{"maxResults": 10}, &r)
 	if err != nil {
 		return ""
 	}

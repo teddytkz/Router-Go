@@ -122,6 +122,9 @@ func request(ctx context.Context, c provider.NativeCall) (*http.Request, error) 
 	h.Set("Content-Type", "application/json")
 	h.Set("Accept", "application/vnd.amazon.eventstream")
 	h.Set("Authorization", "Bearer "+c.Token)
+	for k, v := range identity(credentialSeed(c.Data, c.Token), true) {
+		h.Set(k, v)
+	}
 	if m, _ := c.Data["authMethod"].(string); m == "external_idp" {
 		h.Set("TokenType", "EXTERNAL_IDP") // binds an enterprise IdP token to its profile
 	}

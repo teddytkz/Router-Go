@@ -17,14 +17,14 @@ const (
 )
 
 // usage ports XRouter-Next's getKiroUsage: the same three endpoint attempts (CodeWhisperer GET, CodeWhisperer POST,
-// Amazon Q GET), the first that answers 2xx wins. Only the provider's own static headers are sent: the extra
-// "KiroIDE" identity headers XRouter adds to the first attempt are left out.
+// Amazon Q GET), the first that answers 2xx wins.
 func usage(ctx context.Context, d provider.Doer, c provider.UsageCall) (provider.Usage, error) {
 	method, _ := c.Data["authMethod"].(string)
 	if method == "" {
 		method = "builder-id"
 	}
-	auth := map[string]string{"Authorization": "Bearer " + c.Token}
+	auth := identity(credentialSeed(c.Data, c.Token), false)
+	auth["Authorization"] = "Bearer " + c.Token
 	switch method {
 	case "api_key": // a long-lived key, not an OIDC token
 		auth["tokentype"] = "API_KEY"
