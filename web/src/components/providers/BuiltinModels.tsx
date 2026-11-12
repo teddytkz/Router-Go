@@ -38,8 +38,8 @@ export function BuiltinModels({ p }: { p: BuiltinProvider }) {
     catch (e) { res = { state: "fail", msg: errText(e) }; toast("err", `${code(id)}: ${res.msg}`); }
     setResults((s) => ({ ...s, [id]: res }));
   };
-  const enable = (m: BuiltinModel) => { setBusy(m.id); add.mutate({ providerAlias: p.alias, id: m.id, name: m.name }, { onError: (e) => toast("err", errText(e)), onSettled: () => setBusy(null) }); };
-  const disable = (id: string) => { setBusy(id); del.mutate({ providerAlias: p.alias, id }, { onError: (e) => toast("err", errText(e)), onSettled: () => setBusy(null) }); };
+  const enable = (m: BuiltinModel) => { setBusy(m.id); add.mutate({ providerAlias: p.alias, id: m.id, name: m.name }, { onSuccess: () => toast("ok", `${m.name || m.id} enabled`), onError: (e) => toast("err", errText(e)), onSettled: () => setBusy(null) }); };
+  const disable = (id: string) => { setBusy(id); del.mutate({ providerAlias: p.alias, id }, { onSuccess: () => toast("ok", `${id} disabled`), onError: (e) => toast("err", errText(e)), onSettled: () => setBusy(null) }); };
   const bulkDo = (action: "enable-all" | "disable-all") => bulk.mutate({ id: p.id, action }, { onSuccess: () => { setConfirm(false); toast("ok", action === "enable-all" ? "All models enabled" : "All models disabled"); }, onError: (e) => { setConfirm(false); toast("err", errText(e)); } });
 
   return (

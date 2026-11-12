@@ -124,11 +124,14 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 
 // ---------- Copy ----------
 export function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState(false), toast = useToast();
   return (
     <Button size="sm" variant="ghost" aria-label={label} onClick={async () => {
-      try { await navigator.clipboard.writeText(value); } catch { /* insecure context: fall through */ }
-      setDone(true); setTimeout(() => setDone(false), 1400);
+      try {
+        await navigator.clipboard.writeText(value);
+        toast("ok", "Copied to clipboard");
+        setDone(true); setTimeout(() => setDone(false), 1400);
+      } catch { toast("err", "Could not copy: the browser blocked clipboard access"); }
     }}>
       {done ? <Check className="size-4 text-ok" /> : <Copy className="size-4" />}
     </Button>

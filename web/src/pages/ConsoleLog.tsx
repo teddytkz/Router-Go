@@ -49,7 +49,7 @@ export default function ConsoleLog() {
     if (follow && pane.current) pane.current.scrollTop = pane.current.scrollHeight;
   }, [shown, follow]);
 
-  const clear = () => api("/api/console-logs", { method: "DELETE" }).catch((e) => toast("err", errText(e)));
+  const clear = () => api("/api/console-logs", { method: "DELETE" }).then(() => toast("ok", "Logs cleared")).catch((e) => toast("err", errText(e)));
   const count = (l: string) => logs.filter((e) => e.level === l).length;
 
   return (

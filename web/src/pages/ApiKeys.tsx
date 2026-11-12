@@ -99,7 +99,7 @@ function KeyRow({ k }: { k: ApiKey }) {
         <Badge className="ml-1.5"><Gauge className="size-3" />{max ? `${fmtTokens(k.usedTokens ?? 0)} / ${fmtTokens(max)}` : "Unlimited"}</Badge>
       </button>
       <div className="ml-auto flex shrink-0 items-center gap-1">
-        <Switch checked={k.isActive} label={`${k.name} enabled`} disabled={toggle.isPending} onChange={(v) => toggle.mutate({ id: k.id, isActive: v }, { onError: (e) => toast("err", errText(e)) })} />
+        <Switch checked={k.isActive} label={`${k.name} enabled`} disabled={toggle.isPending} onChange={(v) => toggle.mutate({ id: k.id, isActive: v }, { onSuccess: () => toast("ok", `${k.name} ${v ? "enabled" : "disabled"}`), onError: (e) => toast("err", errText(e)) })} />
         <span aria-hidden className="mx-2 h-5 w-px bg-border" />
         <Button size="sm" variant="ghost" onClick={() => setShow((s) => !s)} aria-label={show ? `Hide ${k.name}` : `Reveal ${k.name}`}>{show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</Button>
         <CopyButton value={k.key} label={`Copy ${k.name}`} />

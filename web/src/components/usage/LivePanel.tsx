@@ -11,7 +11,8 @@ export function LivePanel({ data }: { data: UsageSummary | undefined }) {
   const pills = [
     { label: "Live Requests · 5m", value: l ? fmtFull(l.requests) : "—" },
     { label: "Models Active · 5m", value: l ? fmtFull(l.modelsActive) : "—" },
-    { label: "RPM", value: l ? (Math.round(l.rpm * 10) / 10).toString() : "—" },
+    // whole requests only: 6 in 5 minutes is 1.2 rpm, shown as 1 and never as a fraction or 0
+    { label: "RPM", value: l ? String(l.requests ? Math.max(1, Math.round(l.rpm)) : 0) : "—" },
     { label: "Avg Response", value: l ? lat(l.avgLatencyMs) : "—" },
   ];
   return (
@@ -31,9 +32,10 @@ export function LivePanel({ data }: { data: UsageSummary | undefined }) {
           <div className="lg:relative lg:flex-1 lg:min-h-40">
           <ul className="max-h-64 lg:max-h-none lg:absolute lg:inset-0 overflow-y-auto -mx-1 divide-y divide-border">
             {data.recent.map((r) => (
+              // one line: the model id ellipsizes on narrow cards, the tooltip still shows it whole
               <li key={r.id} className="flex items-center gap-2 px-1 py-2 text-[13px]">
                 <span className={cn("size-2 rounded-full shrink-0", r.status === "ok" ? "bg-ok" : r.status === "canceled" ? "bg-warn" : "bg-err")} aria-label={r.status} />
-                <span className="font-mono truncate flex-1 min-w-0" title={r.model}>{r.model}</span>
+                <span className="font-mono text-[11px] truncate flex-1 min-w-0" title={r.model}>{r.model}</span>
                 <span className="tabular-nums whitespace-nowrap text-xs"><span className="text-accent">{fmtFull(r.promptTokens)}↑</span> <span className="text-ok">{fmtFull(r.completionTokens)}↓</span></span>
                 <span className="text-xs text-muted whitespace-nowrap w-16 text-right">{ago(r.timestamp, now)}</span>
               </li>

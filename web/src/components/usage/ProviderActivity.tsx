@@ -1,14 +1,25 @@
 import { Server } from "lucide-react";
+import { useState } from "react";
 import { Badge, Card, cn, EmptyState, Skeleton } from "../ui";
 import type { UsageSummary } from "../../lib/api";
-import { useActiveRequests, useAllNodes } from "../../lib/hooks";
+import { useActiveRequests, useAllNodes, useNodes } from "../../lib/hooks";
+import { LOGOS } from "../providers/Builtin";
 import { useNow } from "./shared";
 
 const IDLE_MS = 24 * 60 * 60 * 1000;
 
+/** Provider logo when one exists, initials otherwise (custom nodes keep their OpenAI/Anthropic mark). */
+function ProviderTile({ id, name, type }: { id: string; name: string; type?: string }) {
+  const [broken, setBroken] = useState(false);
+  const src = LOGOS.has(id) ? `/providers/${id}.png` : type ? `/providers/${type === "anthropic-compatible" ? "anthropic" : "openai"}.svg` : null;
+  if (src && !broken) return <img src={src} alt="" aria-hidden onError={() => setBroken(true)} className="size-8 shrink-0 rounded-md object-cover" />;
+  return <span className="grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent text-sm font-bold" aria-hidden>{name.slice(0, 2).toUpperCase()}</span>;
+}
+
 /** Every provider with the models it served in the last 24h; models being served right now glow green. */
 export function ProviderActivity({ data }: { data: UsageSummary | undefined }) {
   const nodes = useAllNodes();
+  const custom = useNodes();
   const active = useActiveRequests();
   const now = useNow(30_000);
   const loading = nodes.isLoading || !data;
@@ -41,7 +52,7 @@ export function ProviderActivity({ data }: { data: UsageSummary | undefined }) {
           <ul className="space-y-1.5 max-h-80 lg:max-h-[22rem] overflow-y-auto pr-0.5">
             {rows.map(({ node, models, hot, state }) => (
               <li key={node.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 min-w-0">
-                <span className="grid size-8 shrink-0 place-items-center rounded-md bg-accent-soft text-accent text-sm font-bold" aria-hidden>{node.name.slice(0, 2).toUpperCase()}</span>
+                <ProviderTile id={node.id} name={node.name} type={custom.data?.find((n) => n.id === node.id)?.type} />
                 <span className="w-28 sm:w-40 shrink-0 truncate text-sm font-medium" title={node.name}>{node.name}</span>
                 <div className="flex flex-1 min-w-0 items-center gap-1.5 overflow-x-auto pb-0.5">
                   {models.length === 0 ? <span className="text-xs text-muted">No active models</span> : models.map((m) => (

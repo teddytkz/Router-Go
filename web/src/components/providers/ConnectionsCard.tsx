@@ -86,7 +86,7 @@ function ConnectionRow({ c, first, last, busy, run, onUp, onDown, onTest }: { c:
         <Button size="sm" variant="ghost" loading={testing} onClick={onTest} aria-label={`Test ${c.name}`}>{!testing && <Zap className="size-4" />}Test</Button>
         <Button size="sm" variant="ghost" onClick={() => setEdit(true)} aria-label={`Edit ${c.name}`}><Pencil className="size-4" />Edit</Button>
         <Button size="sm" variant="ghost" className="text-err hover:text-err" onClick={() => setConfirm(true)} aria-label={`Delete ${c.name}`}><Trash2 className="size-4" />Delete</Button>
-        <Switch checked={c.isActive} label={`${c.name} enabled`} disabled={patch.isPending} onChange={(v) => patch.mutate({ id: c.id, isActive: v }, { onError: (e) => toast("err", errText(e)) })} />
+        <Switch checked={c.isActive} label={`${c.name} enabled`} disabled={patch.isPending} onChange={(v) => patch.mutate({ id: c.id, isActive: v }, { onSuccess: () => toast("ok", `${c.name} ${v ? "enabled" : "disabled"}`), onError: (e) => toast("err", errText(e)) })} />
       </div>
       {edit && <EditKeyModal c={c} onClose={() => setEdit(false)} />}
       <ConfirmModal open={confirm} onClose={() => setConfirm(false)} loading={del.isPending} title="Delete API key" body={`Remove "${c.name}"? Requests will stop using this key.`}
@@ -119,7 +119,7 @@ export function ConnectionsCard({ providerId, conns, onAdd, emptyAction, emptyBo
   const move = async (i: number, d: -1 | 1) => { // swap with neighbour; priorities are 1..N
     const a = sorted[i], b = sorted[i + d];
     setMoving(true);
-    try { await Promise.all([patch.mutateAsync({ id: a.id, priority: i + d + 1 }), patch.mutateAsync({ id: b.id, priority: i + 1 })]); }
+    try { await Promise.all([patch.mutateAsync({ id: a.id, priority: i + d + 1 }), patch.mutateAsync({ id: b.id, priority: i + 1 })]); toast("ok", "Priority updated"); }
     catch (e) { toast("err", errText(e)); } finally { setMoving(false); }
   };
   const addBtn = <Button variant="primary" size="sm" onClick={onAdd}><Plus className="size-4" />Add API Key</Button>;

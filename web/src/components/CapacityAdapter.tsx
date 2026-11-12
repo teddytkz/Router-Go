@@ -27,7 +27,7 @@ export function CapacityAdapter() {
   const update = (k: Key, patch: Partial<CapacityPool>) => {
     const next: Adapter = { vision: pool("vision"), audioInput: pool("audioInput"), [k]: { ...pool(k), ...patch } };
     setPending(next);
-    save.mutate({ capacityAdapter: next }, { onError: (e) => toast("err", errText(e)), onSettled: () => setPending(null) });
+    save.mutate({ capacityAdapter: next }, { onSuccess: () => toast("ok", "Capacity adapter saved"), onError: (e) => toast("err", errText(e)), onSettled: () => setPending(null) });
   };
 
   const added = custom.data ?? [];

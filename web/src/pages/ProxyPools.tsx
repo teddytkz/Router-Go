@@ -99,7 +99,7 @@ function PoolCard({ p, now, onEdit }: { p: ProxyPool; now: number; onEdit: () =>
           <button type="button" className={`${act} text-warn hover:bg-warn-soft`} disabled={test.isPending} onClick={run} aria-label={`Test ${p.name}`} title="Test">{test.isPending ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}</button>
           <button type="button" className={`${act} text-accent hover:bg-accent-soft`} onClick={onEdit} aria-label={`Edit ${p.name}`} title="Edit"><Pencil className="size-4" /></button>
           <button type="button" className={`${act} text-err hover:bg-err-soft`} onClick={() => setConfirm(true)} aria-label={`Delete ${p.name}`} title="Delete"><Trash2 className="size-4" /></button>
-          <Switch checked={p.isActive} label={`${p.name} enabled`} disabled={update.isPending} onChange={(v) => update.mutate({ id: p.id, isActive: v }, { onError: (e) => toast("err", errText(e)) })} />
+          <Switch checked={p.isActive} label={`${p.name} enabled`} disabled={update.isPending} onChange={(v) => update.mutate({ id: p.id, isActive: v }, { onSuccess: () => toast("ok", `${p.name} ${v ? "enabled" : "disabled"}`), onError: (e) => toast("err", errText(e)) })} />
         </div>
       </div>
       <ConfirmModal open={confirm} onClose={() => setConfirm(false)} loading={del.isPending} title="Delete proxy pool"

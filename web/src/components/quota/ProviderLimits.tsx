@@ -89,7 +89,7 @@ function ConnectionCard({ conn, provider, usage, quotas, now, hidden, showSortLa
               <Trash2 className={cn("size-[18px]", del.isPending && "animate-pulse")} />
             </button>
             <div className="pl-0.5" title={conn.isActive ? "Disable connection" : "Enable connection"}>
-              <Switch checked={conn.isActive} label={`${name} ${label ?? ""} enabled`} disabled={busy} onChange={(v) => patch.mutate({ id: conn.id, isActive: v }, { onError: (e) => toast("err", errText(e)) })} />
+              <Switch checked={conn.isActive} label={`${name} ${label ?? ""} enabled`} disabled={busy} onChange={(v) => patch.mutate({ id: conn.id, isActive: v }, { onSuccess: () => toast("ok", `${name}${label ? ` ${label}` : ""} ${v ? "enabled" : "disabled"}`), onError: (e) => toast("err", errText(e)) })} />
             </div>
           </div>
         </div>
