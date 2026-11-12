@@ -1160,7 +1160,15 @@ func (a *API) connectionModels(w http.ResponseWriter, r *http.Request) {
 // ---- usage ----
 
 func (a *API) usageStats(w http.ResponseWriter, r *http.Request) {
-	st, err := a.Store.Stats(queryInt(r, "hours", 24, 1, 24*30))
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = "24h"
+	}
+	if !db.Periods[period] {
+		writeErr(w, 400, "period must be one of month, today, 24h, 7d, 30d, 60d, all")
+		return
+	}
+	st, err := a.Store.Stats(period)
 	if err != nil {
 		dbErr(w, err)
 		return

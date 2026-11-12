@@ -399,15 +399,18 @@ func TestUsageStatsCacheAndBuckets(t *testing.T) {
 	}, "chat")
 	e.addKey("one", "k1")
 	e.chat(`{"model":"mock/m","messages":[]}`, e.apiKey)
-	st, err := e.store.Stats(24)
+	st, err := e.store.Stats("24h")
 	if err != nil || st.Requests != 1 || st.PromptTokens != 10 || st.CompletionTokens != 2 || st.CacheTokens != 6 || st.Bucket != "hour" {
 		t.Fatalf("stats = %+v err=%v", st, err)
 	}
 	if last := st.Series[len(st.Series)-1]; last.CacheTokens != 6 || last.Requests != 1 {
 		t.Fatalf("last bucket = %+v", last)
 	}
-	if st, _ = e.store.Stats(24 * 7); st.Bucket != "day" || len(st.Series) < 7 || st.CacheTokens != 6 {
+	if st, _ = e.store.Stats("7d"); st.Bucket != "day" || len(st.Series) < 7 || st.CacheTokens != 6 {
 		t.Fatalf("7d stats = bucket %s, %d points, cache %d", st.Bucket, len(st.Series), st.CacheTokens)
+	}
+	if st, _ = e.store.Stats("today"); st.Bucket != "hour" || st.Requests != 1 || st.CacheTokens != 6 {
+		t.Fatalf("today stats = %+v", st)
 	}
 }
 

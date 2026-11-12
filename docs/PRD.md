@@ -83,7 +83,7 @@ Router-Go/
 | Page | Contents |
 |---|---|
 | Login | Password form, lockout message |
-| Dashboard | Range picker (24h/7d/30d); cards for total requests, total input, total output, total cache; request & token (input/output/cache) charts per hour/day; most-used models chart |
+| Dashboard | Range picker (Today/24h/7d/30d, default Today); cards for total requests, total input, total output, total cache; request & token (input/output/cache) charts per hour/day; most-used models chart |
 | Providers | Node list + status, add/edit/delete node, manage the key pool per node, connection test, view models |
 | API Keys | Gateway base URL, list & create gateway API keys (+ access list), `curl`/SDK examples |
 | Usage | Request history table (filter by provider/model/status), total tokens |

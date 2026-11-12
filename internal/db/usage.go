@@ -96,13 +96,17 @@ type ModelCount struct {
 
 const cacheExpr = `COALESCE(json_extract(tokens,'$.cached_tokens'),0)`
 
-// Stats aggregates the last `hours` hours: hourly buckets up to 48h, daily buckets beyond. status='error' counts as an error.
-func (s *Store) Stats(hours int) (*Stats, error) {
-	since := time.Now().UTC().Add(-time.Duration(hours) * time.Hour)
-	ts := since.Format("2006-01-02T15:04:05.000Z")
-	st := &Stats{Series: []Bucket{}, TopModels: []ModelCount{}, Bucket: "hour"}
-	if hours > 48 {
-		st.Bucket = "day"
+// Stats aggregates one period (see Periods): hourly buckets for today and 24h, daily buckets beyond. status='error' counts as an error.
+func (s *Store) Stats(period string) (*Stats, error) {
+	now := time.Now()
+	since := periodStart(period, now)
+	ts := since.UTC().Format("2006-01-02T15:04:05.000Z")
+	st := &Stats{Series: []Bucket{}, TopModels: []ModelCount{}, Bucket: "day"}
+	if since.IsZero() { // "all": start at the first request
+		ts = ""
+	}
+	if period == "today" || period == "24h" {
+		st.Bucket = "hour"
 	}
 	var avg sql.NullFloat64
 	err := s.DB.QueryRow(`SELECT COUNT(*), COALESCE(SUM(status='error'),0), COALESCE(SUM(promptTokens),0), COALESCE(SUM(completionTokens),0), COALESCE(SUM(`+cacheExpr+`),0), AVG(latencyMs)

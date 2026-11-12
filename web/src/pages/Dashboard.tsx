@@ -2,10 +2,15 @@ import { Activity, ArrowDownToLine, ArrowUpFromLine, Cpu, DatabaseZap, MemorySti
 import { useState } from "react";
 import { Card, cn, fmtNum, PageHeader, Skeleton } from "../components/ui";
 import { Dot, fmtFull, Tip, useTip } from "../components/usage/shared";
-import type { Stats, SysSnapshot } from "../lib/api";
+import type { Stats, SysSnapshot, UsagePeriod } from "../lib/api";
 import { useStats, useSystem } from "../lib/hooks";
 
-const RANGES = [{ label: "24h", hours: 24 }, { label: "7d", hours: 24 * 7 }, { label: "30d", hours: 24 * 30 }] as const;
+const RANGES = [
+  { label: "Today", period: "today", sub: "Today" },
+  { label: "24h", period: "24h", sub: "Last 24 hours" },
+  { label: "7d", period: "7d", sub: "Last 7 days" },
+  { label: "30d", period: "30d", sub: "Last 30 days" },
+] as const;
 const COLORS = { input: "var(--accent)", output: "var(--ok)", cache: "var(--warn)" };
 
 function StatCard({ icon, label, value, sub, color }: { icon: React.ReactNode; label: string; value: string; sub?: string; color: string }) {
@@ -174,14 +179,14 @@ function SystemCards({ s }: { s: SysSnapshot | undefined }) {
 
 export default function Dashboard() {
   const system = useSystem();
-  const [hours, setHours] = useState<number>(24);
-  const stats = useStats(hours);
+  const [period, setPeriod] = useState<UsagePeriod>("today");
+  const stats = useStats(period);
   const s = stats.data;
   const range = (
     <div role="group" aria-label="Time range" className="inline-flex rounded-lg border border-border bg-surface p-0.5">
       {RANGES.map((r) => (
-        <button key={r.hours} type="button" aria-pressed={hours === r.hours} onClick={() => setHours(r.hours)}
-          className={cn("h-8 px-3 rounded-md text-[13px] font-medium cursor-pointer transition-colors", hours === r.hours ? "bg-accent-soft text-accent" : "text-muted hover:text-text")}>
+        <button key={r.period} type="button" aria-pressed={period === r.period} onClick={() => setPeriod(r.period)}
+          className={cn("h-8 px-3 rounded-md text-[13px] font-medium cursor-pointer transition-colors", period === r.period ? "bg-accent-soft text-accent" : "text-muted hover:text-text")}>
           {r.label}
         </button>
       ))}
@@ -189,7 +194,7 @@ export default function Dashboard() {
   );
   return (
     <>
-      <PageHeader title="Dashboard" subtitle={`Last ${RANGES.find((r) => r.hours === hours)?.label}`} actions={range} />
+      <PageHeader title="Dashboard" subtitle={RANGES.find((r) => r.period === period)?.sub} actions={range} />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
         {!s ? Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[104px]" />) : <>
           <StatCard icon={<Activity className="size-4" />} color={COLORS.input} label="Total requests" value={fmtFull(s.requests)} sub={s.errors ? `${s.errors} failed` : "no failures"} />

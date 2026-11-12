@@ -31,7 +31,7 @@ export function useProvider(id?: string) {
   return { data: found, isLoading: !found && (b.isLoading || n.isLoading) };
 }
 export const useConnections = () => useQuery({ queryKey: ["connections"], queryFn: () => api<{ connections: Connection[] }>("/api/providers").then((r) => r.connections) });
-export const useStats = (hours = 24) => useQuery({ queryKey: ["usage", "stats", hours], queryFn: () => api<Stats>(`/api/usage/stats?hours=${hours}`), refetchInterval: 15_000 });
+export const useStats = (period: UsagePeriod = "24h") => useQuery({ queryKey: ["usage", "stats", period], queryFn: () => api<Stats>(`/api/usage/stats?period=${period}`), refetchInterval: 15_000 });
 export const useNodeModels = (id: string | null) =>
   useQuery({ queryKey: ["models", id], enabled: !!id, queryFn: () => api<NodeModels>(`/api/provider-nodes/${id}/models`) });
 export const useAllModels = (nodes: RouteNode[] | undefined) =>
