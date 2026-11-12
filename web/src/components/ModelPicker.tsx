@@ -42,7 +42,7 @@ export function ModelPicker({ groups, selected, onChange, maxLen = 256, needs }:
   return (
     <div className="space-y-4">
       <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted" aria-hidden />
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted" aria-hidden />
         <Input aria-label="Search models" className="pl-8" placeholder="Search models" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       {!groups.length ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-[13px] text-muted">No models are available yet. Add models to a provider first (Providers → a provider → Models), or type an ID below.</p>

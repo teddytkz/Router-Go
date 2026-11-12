@@ -33,7 +33,7 @@ export function Card({ className, children }: { className?: string; children: Re
 }
 
 // ---------- Fields ----------
-const field = "w-full h-9 rounded-lg border border-border bg-surface px-3 text-sm placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 transition";
+const field = "w-full h-9 rounded-lg border border-border bg-surface px-3 text-sm placeholder:text-muted/70 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25 transition disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-muted";
 export function Field({ label, hint, error, children }: { label: string; hint?: string; error?: string; children: (id: string) => ReactNode }) {
   const id = useId();
   return (

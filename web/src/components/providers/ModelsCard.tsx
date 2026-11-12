@@ -131,7 +131,7 @@ export function ModelsCard({ node }: { node: ProviderNode }) {
               <div className="flex flex-wrap items-center gap-3">
                 {up.length > 8 && (
                   <div className="relative flex-1 basis-48 min-w-0">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted" aria-hidden />
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted" aria-hidden />
                     <Input aria-label="Filter upstream models" className="pl-8" placeholder={`Filter ${up.length} models`} value={search} onChange={(e) => setSearch(e.target.value)} />
                   </div>
                 )}
