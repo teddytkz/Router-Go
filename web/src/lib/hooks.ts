@@ -72,6 +72,7 @@ function useMut<TIn, TOut>(fn: (v: TIn) => Promise<TOut>, invalidate: string[][]
 export const useLogin = () => useMut((password: string) => api("/api/auth/login", { method: "POST", json: { password } }), [["auth"]]);
 export const useLogout = () => useMut(() => api("/api/auth/logout", { method: "POST" }), [["auth"]]);
 export const useUpdateSettings = () => useMut((v: Record<string, unknown>) => api<Settings>("/api/settings", { method: "PATCH", json: v }), [["settings"], ["auth"]]);
+export const useCheckUpdate = () => useMut(() => api<{ message: string; restarting: boolean }>("/api/update/check", { method: "POST" }), []);
 export const useCreateKey = () => useMut((name: string) => api<{ key: ApiKey }>("/api/keys", { method: "POST", json: { name } }), [["keys"]]);
 export const useToggleKey = () => useMut((v: { id: string; isActive: boolean }) => api(`/api/keys/${v.id}`, { method: "PATCH", json: { isActive: v.isActive } }), [["keys"]]);
 export const useEditKey = () => useMut((v: { id: string; name: string; key: string }) => api(`/api/keys/${v.id}`, { method: "PATCH", json: { name: v.name, key: v.key } }), [["keys"]]);

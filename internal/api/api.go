@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"slices"
 	"strconv"
@@ -27,6 +28,7 @@ import (
 	"router-go/internal/modelcaps"
 	"router-go/internal/provider"
 	_ "router-go/internal/provider/builtin" // registers the built-in providers
+	"router-go/internal/selfupdate"
 	"router-go/internal/sysstat"
 )
 
@@ -86,6 +88,7 @@ func Handler(cfg *config.Config, store *db.Store, spa http.Handler) http.Handler
 			r.Use(a.requireSession)
 			r.Get("/settings", a.getSettings)
 			r.Patch("/settings", a.patchSettings)
+			r.Post("/update/check", a.checkUpdate)
 			r.Get("/backup", a.exportBackup)
 			r.Post("/restore", a.restoreBackup)
 
@@ -383,6 +386,7 @@ func (a *API) publicSettings() (map[string]any, error) {
 	s["activePort"], s["portSource"] = a.Cfg.PortInfo()
 	s["defaultPort"] = config.DefaultPort
 	s["localOnly"], s["hostFromEnv"], s["bindHost"] = a.Cfg.LocalOnly(), a.Cfg.Host != "", a.Cfg.BindHost()
+	s["updateUrlFromEnv"] = os.Getenv("ROUTER_GO_UPDATE_URL") != ""
 	return s, nil
 }
 
@@ -393,6 +397,23 @@ func (a *API) getSettings(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, 200, s)
+}
+
+// checkUpdate reports whether the update URL holds another binary; when it does, the installing restarts the server.
+func (a *API) checkUpdate(w http.ResponseWriter, _ *http.Request) {
+	if a.Cfg.CheckUpdate == nil {
+		writeErr(w, 400, "no update URL is set")
+		return
+	}
+	diff, msg, err := a.Cfg.CheckUpdate()
+	if err != nil {
+		writeErr(w, 502, err.Error())
+		return
+	}
+	if diff {
+		selfupdate.Wake() // the background loop installs and restarts
+	}
+	writeJSON(w, 200, map[string]any{"message": msg, "restarting": diff})
 }
 
 func (a *API) patchSettings(w http.ResponseWriter, r *http.Request) {
@@ -417,11 +438,26 @@ func (a *API) patchSettings(w http.ResponseWriter, r *http.Request) {
 		CustomPrompt    *string `json:"customPrompt"`
 		CurrentPassword string  `json:"currentPassword"`
 		NewPassword     *string `json:"newPassword"`
+		UpdateURL       *string `json:"updateUrl"`
 	}
 	if !readJSON(w, r, &in) {
 		return
 	}
 	patch := map[string]any{}
+	if in.UpdateURL != nil {
+		u := strings.TrimSpace(*in.UpdateURL)
+		if len(u) > 2048 {
+			writeErr(w, 400, "update URL must be at most 2048 characters")
+			return
+		}
+		if u != "" {
+			if err := selfupdate.CheckURL(u); err != nil {
+				writeErr(w, 400, err.Error())
+				return
+			}
+		}
+		patch["updateUrl"] = u
+	}
 	if in.RequireLogin != nil {
 		patch["requireLogin"] = *in.RequireLogin
 	}

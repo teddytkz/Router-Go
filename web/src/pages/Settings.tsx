@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button, Card, ConfirmModal, errText, Field, Input, PageHeader, Skeleton, Switch, useToast } from "../components/ui";
 import { api } from "../lib/api";
 import type { Settings } from "../lib/api";
-import { useSettings, useUpdateSettings } from "../lib/hooks";
+import { useSettings, useCheckUpdate, useUpdateSettings } from "../lib/hooks";
 
 function Row({ title, body, children }: { title: string; body: string; children: React.ReactNode }) {
   return (
@@ -83,6 +83,45 @@ function BackupCard() {
   );
 }
 
+function UpdateCard({ d }: { d: Settings }) {
+  const toast = useToast(), upd = useUpdateSettings(), check = useCheckUpdate();
+  const [url, setUrl] = useState(d.updateUrl ?? "");
+  const saved = d.updateUrl ?? "";
+  const fromEnv = d.updateUrlFromEnv;
+  const valid = !url || /^https?:\/\/[^\s/]+/i.test(url);
+  const insecure = /^http:\/\//i.test(url) && !/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(url);
+  const save = () => upd.mutate({ updateUrl: url.trim() }, {
+    onSuccess: () => toast("ok", url.trim() ? "Update URL saved" : "Automatic updates off"),
+    onError: (e) => toast("err", errText(e)),
+  });
+  return (
+    <Card className="p-4 mb-4">
+      <h2 className="font-semibold">Updates</h2>
+      <p className="text-muted text-[13px] mt-1 max-w-2xl">
+        Router-Go compares the SHA-256 of its own file with the binary at this URL, at start and every 6 hours. A different one is installed and the process restarts.
+        {fromEnv && " ROUTER_GO_UPDATE_URL is set, so it overrides this."}
+      </p>
+      <form className="mt-3 max-w-2xl" onSubmit={(e) => { e.preventDefault(); if (valid && url.trim() !== saved) save(); }}>
+        <Field label="Update URL" error={url && !valid ? "Must start with http:// or https://" : undefined}
+          hint={insecure ? "Plain http: anyone between this machine and the host can replace the binary." : "Whatever this URL serves runs with your keys."}>{(id) => <Input id={id} className="font-mono" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/router-go" disabled={fromEnv} />}</Field>
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <Button type="submit" variant={url.trim() !== saved ? "primary" : undefined} loading={upd.isPending} disabled={fromEnv || !valid || url.trim() === saved}>Save</Button>
+          <Button type="button" disabled={check.isPending || (!saved && !fromEnv)} loading={check.isPending}
+            onClick={() => check.mutate(undefined, {
+              onSuccess: (r) => {
+                toast("ok", r.message);
+                // the background loop installs and execs a new binary: follow it once it is up
+                if (r.restarting) setTimeout(() => location.reload(), 6000);
+              },
+              onError: (e) => toast("err", errText(e)),
+            })}>Check for update</Button>
+        </div>
+      </form>
+      {check.data && <p className="text-[13px] mt-2">{check.data.message}</p>}
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const s = useSettings(), upd = useUpdateSettings(), toast = useToast();
   const [cur, setCur] = useState(""), [next, setNext] = useState("");
@@ -103,6 +142,7 @@ export default function SettingsPage() {
         </Row>
       </Card>
       <PortCard d={d} />
+      <UpdateCard d={d} />
       <BackupCard />
       <Card className="p-4 mb-4">
         <h2 className="font-semibold mb-3">Change password</h2>

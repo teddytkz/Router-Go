@@ -36,6 +36,8 @@ type Config struct {
 
 	// Rebind moves the running server to another port (set by main). It binds the new port first, so a busy port is an error.
 	Rebind func(port int) error
+	// CheckUpdate asks the update server whether it publishes another binary (set by main); the message goes to the dashboard.
+	CheckUpdate func() (diff bool, msg string, err error)
 
 	mu         sync.Mutex
 	port       int

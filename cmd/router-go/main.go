@@ -23,6 +23,7 @@ import (
 	"router-go/internal/db"
 	"router-go/internal/gateway"
 	"router-go/internal/instance"
+	"router-go/internal/selfupdate"
 	"router-go/internal/tray"
 	"router-go/web"
 )
@@ -161,6 +162,35 @@ func main() {
 	consolelog.Logf("INFO", "SERVER", "router-go %s listening on %s [port from %s] (data: %s)", config.Version, ln.Addr(), src, cfg.DataDir)
 	start(ln)
 
+	shutdown := func() {
+		mu.Lock()
+		srv := current
+		mu.Unlock()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(ctx)
+	}
+	// restartAfterUpdate ends the server and runs the new binary; restartSelf only fails when the process could not be
+	// replaced, in which case the new binary is on disk and takes effect on the next start.
+	restartAfterUpdate := func() {
+		if err := restartSelf(shutdown); err != nil {
+			consolelog.Logf("WARN", "UPDATE", "restart: %v (the new binary is on disk and starts on the next run)", err)
+		}
+	}
+	updateURL := func() string {
+		if v := os.Getenv("ROUTER_GO_UPDATE_URL"); v != "" {
+			return v
+		}
+		s, err := store.Settings()
+		if err != nil {
+			return ""
+		}
+		u, _ := s["updateUrl"].(string)
+		return u
+	}
+	cfg.CheckUpdate = func() (bool, string, error) { return selfupdate.CheckMessage(updateURL()) }
+	go selfupdate.Run(bg, updateURL, restartAfterUpdate)
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	stopTray := tray.Start(web.Icon(), func() {
@@ -171,10 +201,5 @@ func main() {
 	})
 	<-stop
 	defer stopTray()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	mu.Lock()
-	srv := current
-	mu.Unlock()
-	_ = srv.Shutdown(ctx)
+	shutdown()
 }

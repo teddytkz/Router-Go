@@ -112,6 +112,19 @@ Data lives in `~/.router-go` (Windows: `%USERPROFILE%\.router-go`); the database
 | `API_KEY_SECRET` | Secret for gateway API keys |
 | `AUTH_COOKIE_SECURE=true` | Force the `Secure` cookie flag (on automatically over HTTPS) |
 | `TRUST_PROXY=true` | Trust proxy headers from a reverse proxy in front of Router-Go |
+| `ROUTER_GO_UPDATE_URL` | Overrides **Settings → Updates → Update URL**; the setting is what you normally use |
+
+### Self-update
+
+Set the update URL in **Settings → Updates**. Router-Go has no release version to compare, so it identifies a binary by the SHA-256 of its own file: it fetches the URL at start and every 6 hours, and a different hash means the download replaces the running file and the process restarts into it (same pid on Linux/macOS). **Check for update** does the same check immediately.
+
+- **HTTPS only.** Plain `http` is accepted just for a server on this machine, for testing.
+- **Checked before replacing:** the download must be this platform's executable format, and it is started once with `-version`; if that fails, the old binary stays.
+- **The URL is the trust boundary.** Whatever that server returns runs as this process, with your keys. Keep it private.
+- **Platforms:** the file must be writable by the user running Router-Go. On Windows the old file is renamed to `.old` (deleted on a later update), and the restart starts a new process.
+- **Not covered:** an open stream (SSE) is dropped by the restart; the client retries. A symlinked binary is replaced at the link target, not the link.
+
+A build to publish: `GOOS=linux GOARCH=amd64 ./build.sh` (or any target), then upload `bin/router-go`.
 
 Behind an HTTPS reverse proxy, set `TRUST_PROXY=true` and make sure the proxy sends `X-Forwarded-Proto`.
 

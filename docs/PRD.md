@@ -33,6 +33,7 @@ XRouter-Next is a local AI gateway: a single OpenAI-compatible endpoint (`/v1/*`
 | Backup | `GET /api/backup` downloads `{format:"router-go-backup",version:1,tables}` (settings, providerConnections, providerNodes, proxyPools, apiKeys, combos, kv; no usage tables). `POST /api/restore` (JSON only) replaces every table present in the file in one transaction and keeps this machine's `port` / `localOnly` | Move a setup between machines; the file holds secrets in clear text |
 | Bind | All interfaces by default. **Settings → Local only** (`settings.localOnly`) binds `127.0.0.1` and applies live; `HOSTNAME_BIND` / `ROUTER_GO_ADDR` win over it | Local-only is opt-in |
 | Port | Default `20128` (same as XRouter-Next). Priority: `--port` > env `PORT`/`ROUTER_GO_ADDR` > `settings.port` > default. Changing it from Settings moves the listener live (the new port is bound first; port in use → 409, the old listener is closed after 1 s) | Existing clients keep working |
+| Self-update | `internal/selfupdate`, URL saved in **Settings → Updates** (`settings.updateUrl`, refused unless https or loopback http); `ROUTER_GO_UPDATE_URL` overrides it. Identity is the SHA-256 of the running file (no build version to compare): a different hash at the URL is downloaded, checked (platform format + starts with `-version`) and renamed over the binary, then the process restarts into it — `syscall.Exec` on Unix keeps the pid, Windows starts a new process. `POST /api/update/check` runs the same check on demand and wakes the background loop when something new is published | Ship once, then publish a new build at a fixed URL. The check runs at start and every 6 h; a failure only logs a WARN |
 
 ### Repo structure
 
@@ -44,6 +45,7 @@ Router-Go/
 │   ├── config/                  # env, data dir, JWT secret
 │   ├── db/                      # open sqlite, schema bootstrap, repos (settings, nodes, connections, keys, usage)
 │   ├── auth/                    # bcrypt, JWT cookie, login limiter, API key gen/validate
+│   ├── selfupdate/              # replaces its own binary when ROUTER_GO_UPDATE_URL changes (SHA-256 identity)
 │   ├── gateway/                 # /v1/* : model resolve, account fallback, upstream proxy, SSE passthrough
 │   └── api/                     # /api/* dashboard handlers + router
 ├── web/                         # React SPA (src/), embed.go, dist/

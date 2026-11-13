@@ -30,6 +30,7 @@ export type Settings = {
   requireLogin: boolean; requireApiKey: boolean; hasPassword: boolean;
   dataDir: string; version: string; machineId: string;
   port?: number; localOnly: boolean; hostFromEnv: boolean; bindHost: string; activePort: number; defaultPort: number; portSource: "flag" | "env" | "settings" | "default";
+  updateUrl?: string; updateUrlFromEnv: boolean;
   ponytailEnabled?: boolean; ponytailLevel?: "lite" | "full" | "ultra"; watermarksRemoverEnabled?: boolean;
   loopGuardEnabled?: boolean; circuitBreakerEnabled?: boolean; semaphoreEnabled?: boolean;
   customPromptEnabled?: boolean; customPrompt?: string;
